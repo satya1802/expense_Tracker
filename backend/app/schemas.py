@@ -64,11 +64,14 @@ class MeOut(BaseModel):
 
 
 class CategoryCreate(BaseModel):
-    name: str = Field(min_length=1)
+    # Blank/whitespace-only names and duplicates are rejected in the router (not
+    # here) so the response shape matches the CATEGORIES CONTRACT exactly: a plain
+    # 422 {detail: [{field, message}]} or 409 {detail: str}, not pydantic's own shape.
+    name: str
 
 
 class CategoryUpdate(BaseModel):
-    name: str = Field(min_length=1)
+    name: str
 
 
 class CategoryOut(BaseModel):

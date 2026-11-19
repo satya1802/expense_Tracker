@@ -6,46 +6,63 @@ import * as UI from "@/lib/ui";
 import { Icons } from "@/lib/icons";
 import { brand } from "@/lib/brand";
 import { useNavigate } from "@/lib/navigate";
+import { ApiError, apiFetch } from "@/lib/api";
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const { Button, Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, Input, Label, Badge, Table, THead, TBody, TR, TH, TD, Empty } = UI;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const {
+  Button,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+  Input,
+  Label,
+  Badge,
+  Table,
+  THead,
+  TBody,
+  TR,
+  TH,
+  TD,
+  Empty,
+} = UI;
+
 const { Edit } = Icons;
 
-const INITIAL_CATEGORIES = [
-  { id: 'c_groceries', name: 'Groceries', is_default: false, monthly_amount: 650, spent: 512.86, expense_count: 18 },
-  { id: 'c_housing', name: 'Housing', is_default: true, monthly_amount: 1500, spent: 1450.0, expense_count: 2 },
-  { id: 'c_food', name: 'Food & drink', is_default: true, monthly_amount: 320, spent: 268.4, expense_count: 21 },
-  { id: 'c_utilities', name: 'Utilities', is_default: true, monthly_amount: 160, spent: 183.47, expense_count: 5 },
-  { id: 'c_transport', name: 'Transport', is_default: true, monthly_amount: 180, spent: 96.25, expense_count: 9 },
-  { id: 'c_coffee', name: 'Coffee', is_default: false, monthly_amount: 60, spent: 71.4, expense_count: 12 },
-  { id: 'c_gifts', name: 'Gifts & celebrations', is_default: false, monthly_amount: 75, spent: 140.0, expense_count: 3 },
-  { id: 'c_entertainment', name: 'Entertainment', is_default: true, monthly_amount: 120, spent: 64.5, expense_count: 7 },
-  { id: 'c_pets', name: 'Pet care', is_default: false, monthly_amount: 90, spent: 54.0, expense_count: 4 },
-  { id: 'c_shopping', name: 'Shopping', is_default: true, monthly_amount: 200, spent: 0, expense_count: 0 },
-  { id: 'c_health', name: 'Health', is_default: true, monthly_amount: null, spent: 42.0, expense_count: 3 },
-  { id: 'c_gym', name: 'Gym & fitness', is_default: false, monthly_amount: null, spent: 18.0, expense_count: 1 },
-  { id: 'c_other', name: 'Other', is_default: true, monthly_amount: null, spent: 27.9, expense_count: 2 },
-];
-
-const PERIOD_LABEL = 'November 2026';
-const CURRENCY_CODE = 'USD';
+const PERIOD_LABEL = "November 2026";
+const CURRENCY_CODE = "USD";
 
 function formatMoney(value) {
   return (
-    '$' +
-    Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    "$" +
+    Number(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   );
 }
 
 function statusOf(category) {
   if (category.monthly_amount === null || category.monthly_amount === undefined) {
-    return { key: 'none', label: 'No budget set', ratio: null };
+    return { key: "none", label: "No budget set", ratio: null };
   }
   const ratio = category.monthly_amount > 0 ? category.spent / category.monthly_amount : 0;
-  if (category.spent > category.monthly_amount) return { key: 'over', label: 'Over budget', ratio };
-  if (ratio >= 0.8) return { key: 'near', label: 'Near budget', ratio };
-  return { key: 'under', label: 'Under budget', ratio };
+  if (category.spent > category.monthly_amount) return { key: "over", label: "Over budget", ratio };
+  if (ratio >= 0.8) return { key: "near", label: "Near budget", ratio };
+  return { key: "under", label: "Under budget", ratio };
+}
+
+// The categories API (GET /categories) returns only {id, name, is_default}. Budget
+// amounts and spend are out of scope for this ticket (a separate budgets endpoint),
+// so a freshly loaded or newly created category always starts with no budget and no
+// recorded spend; the budgets ticket is responsible for wiring those in.
+function toRow(apiCategory) {
+  return {
+    id: apiCategory.id,
+    name: apiCategory.name,
+    is_default: apiCategory.is_default,
+    monthly_amount: null,
+    spent: 0,
+    expense_count: 0,
+  };
 }
 
 export default function Screen() {
@@ -55,32 +72,24 @@ export default function Screen() {
   // for the one primary action and for custom-category identity.
   const TONE = {
     under: brand.primaryColor,
-    near: '#f5b041',
-    over: '#f2577d',
+    near: "#f5b041",
+    over: "#f2577d",
     none: brand.neutralColor,
   };
-  const SURFACE = 'rgba(255,255,255,0.06)';
-  const SURFACE_2 = 'rgba(255,255,255,0.09)';
-  const HAIRLINE = '1px solid rgba(255,255,255,0.13)';
-  const TEXT = 'rgba(255,255,255,0.94)';
+  const SURFACE = "rgba(255,255,255,0.06)";
+  const SURFACE_2 = "rgba(255,255,255,0.09)";
+  const HAIRLINE = "1px solid rgba(255,255,255,0.13)";
+  const TEXT = "rgba(255,255,255,0.94)";
 
-  const [categories, setCategories] = React.useState(INITIAL_CATEGORIES);
-  const [editor, setEditor] = React.useState(() => {
-    const g = INITIAL_CATEGORIES[0];
-    return {
-      mode: 'edit',
-      id: g.id,
-      name: g.name,
-      budget: String(g.monthly_amount),
-      pendingDelete: false,
-    };
-  });
+  const [categories, setCategories] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [editor, setEditor] = React.useState(null);
   const [errors, setErrors] = React.useState({ name: null, budget: null });
   const [saving, setSaving] = React.useState(false);
-  const [flashId, setFlashId] = React.useState('c_groceries');
+  const [flashId, setFlashId] = React.useState(null);
   const [notice, setNotice] = React.useState({
-    tone: 'info',
-    text: 'Budgets run monthly — on 1 December your spend counters reset and these amounts carry over.',
+    tone: "info",
+    text: "Budgets run monthly — on 1 December your spend counters reset and these amounts carry over.",
   });
 
   const timers = React.useRef([]);
@@ -95,8 +104,35 @@ export default function Screen() {
 
   React.useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
-  const current = editor && editor.mode === 'edit' ? categories.find((c) => c.id === editor.id) : null;
-  const isNew = !!editor && editor.mode === 'new';
+  // AC-016: load the signed-in user's categories on mount. A 401 is handled
+  // globally by apiFetch (clears the token and redirects to sign-in); any other
+  // failure just leaves the list empty with a notice rather than seeded data.
+  React.useEffect(() => {
+    let active = true;
+    apiFetch("/categories")
+      .then((result) => {
+        if (!active) return;
+        setCategories((result.categories || []).map(toRow));
+        setLoading(false);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setLoading(false);
+        if (!(err instanceof ApiError && err.status === 401)) {
+          setNotice({
+            tone: "error",
+            text: "Couldn't load your categories — check your connection and try again.",
+          });
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const current =
+    editor && editor.mode === "edit" ? categories.find((c) => c.id === editor.id) : null;
+  const isNew = !!editor && editor.mode === "new";
   const isDefaultCat = !!current && current.is_default;
 
   // Focus the first usable field whenever the editor opens or changes record.
@@ -115,13 +151,13 @@ export default function Screen() {
   React.useEffect(() => {
     if (!editor) return;
     const onKey = (e) => {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         e.preventDefault();
         closeEditor();
       }
     };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
   }, [editor]);
 
   function closeEditor() {
@@ -132,22 +168,22 @@ export default function Screen() {
 
   function openNew() {
     setErrors({ name: null, budget: null });
-    setEditor({ mode: 'new', id: null, name: '', budget: '', pendingDelete: false });
+    setEditor({ mode: "new", id: null, name: "", budget: "", pendingDelete: false });
   }
 
   function openEdit(cat, pendingDelete) {
     setErrors({ name: null, budget: null });
     setEditor({
-      mode: 'edit',
+      mode: "edit",
       id: cat.id,
       name: cat.name,
-      budget: cat.monthly_amount === null ? '' : String(cat.monthly_amount),
+      budget: cat.monthly_amount === null ? "" : String(cat.monthly_amount),
       pendingDelete: !!pendingDelete,
     });
   }
 
   function trapTab(e) {
-    if (e.key !== 'Tab' || !panelRef.current) return;
+    if (e.key !== "Tab" || !panelRef.current) return;
     const nodes = Array.prototype.slice
       .call(panelRef.current.querySelectorAll('button, input, [tabindex]:not([tabindex="-1"])'))
       .filter((n) => !n.disabled && n.offsetParent !== null);
@@ -168,7 +204,7 @@ export default function Screen() {
     after(1900, () => setFlashId(null));
   }
 
-  function handleSave(e) {
+  async function handleSave(e) {
     e.preventDefault();
     if (!editor || saving) return;
     const nextErrors = { name: null, budget: null };
@@ -176,26 +212,29 @@ export default function Screen() {
     const nameEditable = isNew || !isDefaultCat;
 
     if (nameEditable) {
+      // AC-018: a blank name is blocked client-side before any call is made.
       if (!trimmed) {
-        nextErrors.name = 'Give the category a name — it can’t be blank.';
+        nextErrors.name = "Give the category a name — it can’t be blank.";
       } else {
         const clash = categories.find(
-          (c) => c.name.toLowerCase() === trimmed.toLowerCase() && c.id !== editor.id
+          (c) => c.name.toLowerCase() === trimmed.toLowerCase() && c.id !== editor.id,
         );
         if (clash) {
-          nextErrors.name = 'You already have a category called “' + clash.name + '”. Pick a different name.';
+          nextErrors.name =
+            "You already have a category called “" + clash.name + "”. Pick a different name.";
         }
       }
     }
 
-    const raw = editor.budget.trim().replace(/[$,]/g, '');
+    const raw = editor.budget.trim().replace(/[$,]/g, "");
     let budgetValue = null;
-    if (raw !== '') {
+    if (raw !== "") {
       const parsed = Number(raw);
       if (!isFinite(parsed) || raw.match(/[^0-9.]/)) {
-        nextErrors.budget = 'Enter the budget as a plain number, like 250 or 250.00.';
+        nextErrors.budget = "Enter the budget as a plain number, like 250 or 250.00.";
       } else if (parsed <= 0) {
-        nextErrors.budget = 'A monthly budget has to be more than 0. Use Clear budget to remove it instead.';
+        nextErrors.budget =
+          "A monthly budget has to be more than 0. Use Clear budget to remove it instead.";
       } else {
         budgetValue = Math.round(parsed * 100) / 100;
       }
@@ -204,91 +243,153 @@ export default function Screen() {
     setErrors(nextErrors);
     if (nextErrors.name || nextErrors.budget) {
       setNotice({
-        tone: 'error',
-        text: 'That category wasn’t saved — check the highlighted field in the editor. Nothing you typed was lost.',
+        tone: "error",
+        text: "That category wasn’t saved — check the highlighted field in the editor. Nothing you typed was lost.",
       });
       return;
     }
 
     setSaving(true);
-    after(650, () => {
+    try {
       if (isNew) {
-        const id = 'c_' + trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '_') + '_' + categories.length;
-        setCategories((prev) =>
-          prev.concat([
-            {
-              id,
-              name: trimmed,
-              is_default: false,
-              monthly_amount: budgetValue,
-              spent: 0,
-              expense_count: 0,
-            },
-          ])
-        );
-        flash(id);
-        setNotice({
-          tone: 'success',
-          text:
-            '“' +
-            trimmed +
-            '” added as a custom category' +
-            (budgetValue !== null ? ' with a ' + formatMoney(budgetValue) + ' monthly budget.' : ' — no budget set yet.'),
+        // AC-017: POST /categories; on 201 the list gains the new row.
+        const created = await apiFetch("/categories", {
+          method: "POST",
+          body: JSON.stringify({ name: trimmed }),
         });
-      } else {
+        const row = { ...toRow(created), monthly_amount: budgetValue };
+        setCategories((prev) => prev.concat([row]));
+        flash(row.id);
+        setNotice({
+          tone: "success",
+          text:
+            "“" +
+            trimmed +
+            "” added as a custom category" +
+            (budgetValue !== null
+              ? " with a " + formatMoney(budgetValue) + " monthly budget."
+              : " — no budget set yet."),
+        });
+      } else if (nameEditable && trimmed !== current.name) {
+        const updated = await apiFetch("/categories/" + editor.id, {
+          method: "PATCH",
+          body: JSON.stringify({ name: trimmed }),
+        });
         setCategories((prev) =>
           prev.map((c) =>
-            c.id === editor.id ? { ...c, name: nameEditable ? trimmed : c.name, monthly_amount: budgetValue } : c
-          )
+            c.id === editor.id ? { ...c, name: updated.name, monthly_amount: budgetValue } : c,
+          ),
         );
         flash(editor.id);
         setNotice({
-          tone: 'success',
+          tone: "success",
           text:
-            (nameEditable ? trimmed : current.name) +
-            ' saved — ' +
+            updated.name +
+            " saved — " +
             (budgetValue !== null
-              ? 'budget for ' + PERIOD_LABEL + ' is ' + formatMoney(budgetValue) + '.'
-              : 'no monthly budget is set, so it won’t show a comparison.'),
+              ? "budget for " + PERIOD_LABEL + " is " + formatMoney(budgetValue) + "."
+              : "no monthly budget is set, so it won’t show a comparison."),
+        });
+      } else {
+        // Only the (locally-held) budget amount changed — nothing to send.
+        setCategories((prev) =>
+          prev.map((c) => (c.id === editor.id ? { ...c, monthly_amount: budgetValue } : c)),
+        );
+        flash(editor.id);
+        setNotice({
+          tone: "success",
+          text:
+            current.name +
+            " saved — " +
+            (budgetValue !== null
+              ? "budget for " + PERIOD_LABEL + " is " + formatMoney(budgetValue) + "."
+              : "no monthly budget is set, so it won’t show a comparison."),
         });
       }
       setSaving(false);
       setEditor(null);
-    });
+    } catch (err) {
+      setSaving(false);
+      // AC-018: a 409 renders the duplicate-name validation message without
+      // adding a row (or renaming the existing one).
+      if (err instanceof ApiError && err.status === 409) {
+        setErrors({
+          ...nextErrors,
+          name: (err.body && err.body.detail) || "You already have a category with that name",
+        });
+        setNotice({
+          tone: "error",
+          text: "That category wasn’t saved — check the highlighted field in the editor. Nothing you typed was lost.",
+        });
+        return;
+      }
+      if (err instanceof ApiError && err.status === 422) {
+        const message =
+          (err.body && Array.isArray(err.body.detail) && err.body.detail[0]?.message) ||
+          "Name is required";
+        setErrors({ ...nextErrors, name: message });
+        setNotice({
+          tone: "error",
+          text: "That category wasn’t saved — check the highlighted field in the editor. Nothing you typed was lost.",
+        });
+        return;
+      }
+      if (!(err instanceof ApiError && err.status === 401)) {
+        setNotice({
+          tone: "error",
+          text: "Couldn't save that category — check your connection and try again.",
+        });
+      }
+    }
   }
 
   function handleClearBudget() {
     if (!current || current.monthly_amount === null) return;
-    setCategories((prev) => prev.map((c) => (c.id === current.id ? { ...c, monthly_amount: null } : c)));
+    setCategories((prev) =>
+      prev.map((c) => (c.id === current.id ? { ...c, monthly_amount: null } : c)),
+    );
     flash(current.id);
     setNotice({
-      tone: 'info',
+      tone: "info",
       text:
-        'Budget cleared for ' +
+        "Budget cleared for " +
         current.name +
-        ' — it no longer shows a budget comparison or near/over alerts.',
+        " — it no longer shows a budget comparison or near/over alerts.",
     });
     setEditor(null);
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!current || current.is_default) return;
     if (!editor.pendingDelete) {
       setEditor({ ...editor, pendingDelete: true });
       return;
     }
-    setCategories((prev) => prev.filter((c) => c.id !== current.id));
-    setNotice({
-      tone: 'info',
-      text:
-        current.name +
-        ' deleted. Its ' +
-        current.expense_count +
-        ' expense' +
-        (current.expense_count === 1 ? '' : 's') +
-        ' stay in your history and now show as Uncategorised.',
-    });
-    setEditor(null);
+    setSaving(true);
+    try {
+      await apiFetch("/categories/" + current.id, { method: "DELETE" });
+      setCategories((prev) => prev.filter((c) => c.id !== current.id));
+      setNotice({
+        tone: "info",
+        text:
+          current.name +
+          " deleted. Its " +
+          current.expense_count +
+          " expense" +
+          (current.expense_count === 1 ? "" : "s") +
+          " stay in your history and now show as Uncategorised.",
+      });
+      setSaving(false);
+      setEditor(null);
+    } catch (err) {
+      setSaving(false);
+      if (!(err instanceof ApiError && err.status === 401)) {
+        setNotice({
+          tone: "error",
+          text: "Couldn't delete that category — check your connection and try again.",
+        });
+      }
+    }
   }
 
   const budgetedCount = categories.filter((c) => c.monthly_amount !== null).length;
@@ -296,7 +397,11 @@ export default function Screen() {
   const totalSpent = categories.reduce((s, c) => s + c.spent, 0);
 
   const noticeTone =
-    notice.tone === 'success' ? brand.primaryColor : notice.tone === 'error' ? TONE.over : brand.neutralColor;
+    notice.tone === "success"
+      ? brand.primaryColor
+      : notice.tone === "error"
+        ? TONE.over
+        : brand.neutralColor;
 
   const css = `
     @keyframes np-row-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
@@ -324,18 +429,18 @@ export default function Screen() {
     const tone = TONE[s.key];
     const pct = s.ratio === null ? null : Math.round(s.ratio * 100);
     return (
-      <div className={compact ? '' : 'min-w-[150px]'}>
+      <div className={compact ? "" : "min-w-[150px]"}>
         <span
           className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold"
           style={{
             color: tone,
-            backgroundColor: s.key === 'none' ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.07)',
-            border: '1px solid ' + (s.key === 'none' ? 'rgba(255,255,255,0.12)' : tone + '55'),
+            backgroundColor: s.key === "none" ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.07)",
+            border: "1px solid " + (s.key === "none" ? "rgba(255,255,255,0.12)" : tone + "55"),
           }}
         >
-          {s.key === 'under' ? (
+          {s.key === "under" ? (
             <Icons.CheckCircle className="h-3.5 w-3.5" aria-hidden="true" />
-          ) : s.key === 'none' ? (
+          ) : s.key === "none" ? (
             <span aria-hidden="true" className="text-[14px] leading-none">
               –
             </span>
@@ -348,23 +453,32 @@ export default function Screen() {
           <div className="mt-2">
             <div
               className="np-bar h-1.5 w-full overflow-hidden rounded-full"
-              style={{ backgroundColor: 'rgba(255,255,255,0.10)' }}
+              style={{ backgroundColor: "rgba(255,255,255,0.10)" }}
             >
               <span
                 className="block h-full rounded-full"
                 style={{
-                  width: Math.min(100, pct) + '%',
+                  width: Math.min(100, pct) + "%",
                   background:
-                    s.key === 'under'
-                      ? 'linear-gradient(90deg, ' + brand.primaryColor + ', ' + brand.accentColor + ')'
+                    s.key === "under"
+                      ? "linear-gradient(90deg, " +
+                        brand.primaryColor +
+                        ", " +
+                        brand.accentColor +
+                        ")"
                       : tone,
-                  boxShadow: '0 0 12px ' + tone + '66',
+                  boxShadow: "0 0 12px " + tone + "66",
                 }}
               />
             </div>
-            <p className="mt-1 text-[11px]" style={{ color: brand.neutralColor, fontVariantNumeric: 'tabular-nums' }}>
+            <p
+              className="mt-1 text-[11px]"
+              style={{ color: brand.neutralColor, fontVariantNumeric: "tabular-nums" }}
+            >
               {pct}% of budget
-              {s.key === 'over' ? ' · ' + formatMoney(cat.spent - cat.monthly_amount) + ' over' : ''}
+              {s.key === "over"
+                ? " · " + formatMoney(cat.spent - cat.monthly_amount) + " over"
+                : ""}
             </p>
           </div>
         ) : (
@@ -387,11 +501,17 @@ export default function Screen() {
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
         <div
           className="absolute -top-28 -left-24 h-72 w-72 rounded-full"
-          style={{ background: 'radial-gradient(circle, ' + brand.primaryColor + '2e, transparent 65%)', filter: 'blur(50px)' }}
+          style={{
+            background: "radial-gradient(circle, " + brand.primaryColor + "2e, transparent 65%)",
+            filter: "blur(50px)",
+          }}
         />
         <div
           className="absolute -top-16 right-0 h-80 w-80 rounded-full"
-          style={{ background: 'radial-gradient(circle, ' + brand.accentColor + '2b, transparent 65%)', filter: 'blur(60px)' }}
+          style={{
+            background: "radial-gradient(circle, " + brand.accentColor + "2b, transparent 65%)",
+            filter: "blur(60px)",
+          }}
         />
       </div>
 
@@ -410,9 +530,12 @@ export default function Screen() {
           >
             Categories &amp; budgets
           </h1>
-          <p className="mt-2 max-w-[62ch] text-[15px] leading-relaxed" style={{ color: brand.neutralColor }}>
-            Your eight starter categories are ready to use. Add your own, rename the ones you made, and set a
-            monthly cap wherever you want to be warned before you overspend.
+          <p
+            className="mt-2 max-w-[62ch] text-[15px] leading-relaxed"
+            style={{ color: brand.neutralColor }}
+          >
+            Your starter categories are ready to use. Add your own, rename the ones you made, and
+            set a monthly cap wherever you want to be warned before you overspend.
           </p>
         </div>
         <div className="sm:w-3/12 sm:text-right">
@@ -422,11 +545,12 @@ export default function Screen() {
             onClick={openNew}
             className="np-focus inline-flex w-full items-center justify-center gap-2 px-5 py-3 text-[15px] font-bold sm:w-auto"
             style={{
-              background: 'linear-gradient(100deg, ' + brand.primaryColor + ', ' + brand.accentColor + ')',
+              background:
+                "linear-gradient(100deg, " + brand.primaryColor + ", " + brand.accentColor + ")",
               color: brand.backgroundColor,
               borderRadius: brand.radius,
-              border: 'none',
-              boxShadow: '0 18px 44px ' + brand.accentColor + '45',
+              border: "none",
+              boxShadow: "0 18px 44px " + brand.accentColor + "45",
             }}
           >
             <Icons.Plus className="h-4 w-4" aria-hidden="true" />
@@ -443,7 +567,7 @@ export default function Screen() {
           backgroundColor: SURFACE,
           border: HAIRLINE,
           borderRadius: brand.radius,
-          backdropFilter: 'blur(14px)',
+          backdropFilter: "blur(14px)",
         }}
       >
         <CardHeader className="flex flex-col gap-3 px-5 pt-5 sm:flex-row sm:items-start sm:justify-between sm:px-7 sm:pt-6">
@@ -455,18 +579,13 @@ export default function Screen() {
               Your categories — {PERIOD_LABEL}
             </CardTitle>
             <CardDescription className="mt-1 text-[13px]" style={{ color: brand.neutralColor }}>
-              {categories.length} categories · {budgetedCount} budgeted ·{' '}
-              <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatMoney(totalBudget)}</span> budgeted vs{' '}
-              <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatMoney(totalSpent)}</span> spent
+              {categories.length} categories · {budgetedCount} budgeted ·{" "}
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>{formatMoney(totalBudget)}</span>{" "}
+              budgeted vs{" "}
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>{formatMoney(totalSpent)}</span>{" "}
+              spent
             </CardDescription>
           </div>
-          <span
-            className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-full px-3 py-1 text-[12px]"
-            style={{ color: brand.neutralColor, backgroundColor: 'rgba(255,255,255,0.05)', border: HAIRLINE }}
-          >
-            <Icons.Clock className="h-3.5 w-3.5" aria-hidden="true" />
-            Synced 2 min ago
-          </span>
         </CardHeader>
 
         <div className="px-5 pb-1 sm:px-7">
@@ -475,15 +594,17 @@ export default function Screen() {
             aria-live="polite"
             className="flex items-start gap-2 rounded-2xl px-4 py-3 text-[13px] leading-relaxed"
             style={{
-              color: notice.tone === 'info' ? brand.neutralColor : noticeTone,
-              backgroundColor: 'rgba(255,255,255,0.05)',
-              border: '1px solid ' + (notice.tone === 'info' ? 'rgba(255,255,255,0.12)' : noticeTone + '55'),
+              color: notice.tone === "info" ? brand.neutralColor : noticeTone,
+              backgroundColor: "rgba(255,255,255,0.05)",
+              border:
+                "1px solid " +
+                (notice.tone === "info" ? "rgba(255,255,255,0.12)" : noticeTone + "55"),
               borderRadius: brand.radius,
             }}
           >
-            {notice.tone === 'success' ? (
+            {notice.tone === "success" ? (
               <Icons.CheckCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            ) : notice.tone === 'error' ? (
+            ) : notice.tone === "error" ? (
               <Icons.AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             ) : (
               <Icons.Calendar className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -493,7 +614,13 @@ export default function Screen() {
         </div>
 
         <CardContent className="px-0 pb-2 pt-4 sm:px-2">
-          {categories.length === 0 ? (
+          {loading ? (
+            <div className="px-5 pb-8 pt-2 sm:px-5">
+              <p className="text-[14px]" style={{ color: brand.neutralColor }}>
+                Loading your categories…
+              </p>
+            </div>
+          ) : categories.length === 0 ? (
             <div className="px-5 pb-8 pt-2 sm:px-5">
               <Empty
                 title="No categories left"
@@ -504,10 +631,15 @@ export default function Screen() {
                     onClick={openNew}
                     className="np-focus inline-flex items-center gap-2 px-5 py-2.5 text-[14px] font-bold"
                     style={{
-                      background: 'linear-gradient(100deg, ' + brand.primaryColor + ', ' + brand.accentColor + ')',
+                      background:
+                        "linear-gradient(100deg, " +
+                        brand.primaryColor +
+                        ", " +
+                        brand.accentColor +
+                        ")",
                       color: brand.backgroundColor,
                       borderRadius: brand.radius,
-                      border: 'none',
+                      border: "none",
                     }}
                   >
                     <Icons.Plus className="h-4 w-4" aria-hidden="true" />
@@ -517,7 +649,7 @@ export default function Screen() {
               />
             </div>
           ) : (
-            <Table className="w-full text-left" style={{ fontVariantNumeric: 'tabular-nums' }}>
+            <Table className="w-full text-left" style={{ fontVariantNumeric: "tabular-nums" }}>
               <THead>
                 <TR style={{ borderBottom: HAIRLINE }}>
                   <TH
@@ -576,26 +708,42 @@ export default function Screen() {
                   return (
                     <TR
                       key={cat.id}
-                      className={'np-row ' + (flashId === cat.id ? 'np-flash' : '')}
-                      style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+                      className={"np-row " + (flashId === cat.id ? "np-flash" : "")}
+                      style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
                     >
                       <TD className="px-5 py-4 align-top sm:px-6">
                         <span className="block text-[15px] font-semibold" style={{ color: TEXT }}>
                           {cat.name}
                         </span>
                         <div className="np-mobile mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 lg:hidden">
-                          <span className="text-[12px] md:hidden" style={{ color: cat.is_default ? brand.neutralColor : brand.accentColor }}>
-                            {cat.is_default ? 'Default' : 'Custom'}
+                          <span
+                            className="text-[12px] md:hidden"
+                            style={{
+                              color: cat.is_default ? brand.neutralColor : brand.accentColor,
+                            }}
+                          >
+                            {cat.is_default ? "Default" : "Custom"}
                           </span>
-                          <span className="text-[12px] sm:hidden" style={{ color: brand.neutralColor }}>
-                            {cat.monthly_amount === null ? 'No budget' : formatMoney(cat.monthly_amount) + ' / month'}
+                          <span
+                            className="text-[12px] sm:hidden"
+                            style={{ color: brand.neutralColor }}
+                          >
+                            {cat.monthly_amount === null
+                              ? "No budget"
+                              : formatMoney(cat.monthly_amount) + " / month"}
                           </span>
-                          <span className="text-[12px] font-semibold lg:hidden" style={{ color: TONE[s.key] }}>
+                          <span
+                            className="text-[12px] font-semibold lg:hidden"
+                            style={{ color: TONE[s.key] }}
+                          >
                             {s.label}
                           </span>
                         </div>
-                        <span className="mt-1 hidden text-[12px] lg:block" style={{ color: brand.neutralColor }}>
-                          {cat.expense_count} expense{cat.expense_count === 1 ? '' : 's'} this month
+                        <span
+                          className="mt-1 hidden text-[12px] lg:block"
+                          style={{ color: brand.neutralColor }}
+                        >
+                          {cat.expense_count} expense{cat.expense_count === 1 ? "" : "s"} this month
                         </span>
                       </TD>
                       <TD className="hidden px-4 py-4 align-top md:table-cell">
@@ -603,14 +751,23 @@ export default function Screen() {
                           className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
                           style={{
                             color: cat.is_default ? brand.neutralColor : brand.accentColor,
-                            backgroundColor: cat.is_default ? 'rgba(255,255,255,0.05)' : brand.accentColor + '1f',
-                            border: '1px solid ' + (cat.is_default ? 'rgba(255,255,255,0.14)' : brand.accentColor + '55'),
+                            backgroundColor: cat.is_default
+                              ? "rgba(255,255,255,0.05)"
+                              : brand.accentColor + "1f",
+                            border:
+                              "1px solid " +
+                              (cat.is_default
+                                ? "rgba(255,255,255,0.14)"
+                                : brand.accentColor + "55"),
                           }}
                         >
-                          {cat.is_default ? 'Default' : 'Custom'}
+                          {cat.is_default ? "Default" : "Custom"}
                         </Badge>
                       </TD>
-                      <TD className="hidden px-4 py-4 text-right align-top text-[15px] sm:table-cell" style={{ color: TEXT }}>
+                      <TD
+                        className="hidden px-4 py-4 text-right align-top text-[15px] sm:table-cell"
+                        style={{ color: TEXT }}
+                      >
                         {cat.monthly_amount === null ? (
                           <span style={{ color: brand.neutralColor }}>—</span>
                         ) : (
@@ -632,10 +789,10 @@ export default function Screen() {
                             onClick={() => openEdit(cat, false)}
                             className="np-focus np-rowbtn inline-flex items-center gap-1.5 px-3 py-2 text-[13px] font-semibold"
                             style={{
-                              backgroundColor: 'rgba(255,255,255,0.06)',
+                              backgroundColor: "rgba(255,255,255,0.06)",
                               color: TEXT,
                               border: HAIRLINE,
-                              borderRadius: '999px',
+                              borderRadius: "999px",
                             }}
                           >
                             <Icons.Edit className="h-3.5 w-3.5" aria-hidden="true" />
@@ -645,19 +802,23 @@ export default function Screen() {
                             type="button"
                             aria-label={
                               cat.is_default
-                                ? 'Delete ' + cat.name + ' — default categories cannot be deleted'
-                                : 'Delete ' + cat.name
+                                ? "Delete " + cat.name + " — default categories cannot be deleted"
+                                : "Delete " + cat.name
                             }
-                            title={cat.is_default ? 'Default categories can’t be deleted' : 'Delete ' + cat.name}
+                            title={
+                              cat.is_default
+                                ? "Default categories can’t be deleted"
+                                : "Delete " + cat.name
+                            }
                             disabled={cat.is_default}
                             onClick={() => openEdit(cat, true)}
                             className="np-focus np-rowbtn inline-flex h-9 w-9 items-center justify-center"
                             style={{
-                              backgroundColor: 'rgba(255,255,255,0.04)',
-                              color: cat.is_default ? 'rgba(159,180,208,0.45)' : TONE.over,
+                              backgroundColor: "rgba(255,255,255,0.04)",
+                              color: cat.is_default ? "rgba(159,180,208,0.45)" : TONE.over,
                               border: HAIRLINE,
-                              borderRadius: '999px',
-                              cursor: cat.is_default ? 'not-allowed' : 'pointer',
+                              borderRadius: "999px",
+                              cursor: cat.is_default ? "not-allowed" : "pointer",
                             }}
                           >
                             <Icons.Trash className="h-4 w-4" aria-hidden="true" />
@@ -675,7 +836,8 @@ export default function Screen() {
         {categories.length > 0 ? (
           <CardFooter className="px-5 pb-5 pt-2 sm:px-7">
             <p className="text-[12px]" style={{ color: brand.neutralColor }}>
-              Default categories can hold a budget but keep their names, so your past expenses stay readable.
+              Default categories can hold a budget but keep their names, so your past expenses stay
+              readable.
             </p>
           </CardFooter>
         ) : null}
@@ -686,7 +848,7 @@ export default function Screen() {
         <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-6">
           <div
             className="np-backdrop absolute inset-0"
-            style={{ backgroundColor: 'rgba(3,10,22,0.74)', backdropFilter: 'blur(6px)' }}
+            style={{ backgroundColor: "rgba(3,10,22,0.74)", backdropFilter: "blur(6px)" }}
             aria-hidden="true"
             onClick={closeEditor}
           />
@@ -699,11 +861,11 @@ export default function Screen() {
             onKeyDown={trapTab}
             className="np-panel relative max-h-[92vh] w-full overflow-y-auto sm:max-w-xl"
             style={{
-              backgroundColor: 'rgba(11,26,52,0.94)',
+              backgroundColor: "rgba(11,26,52,0.94)",
               border: HAIRLINE,
               borderRadius: brand.radius,
-              backdropFilter: 'blur(20px)',
-              boxShadow: '0 40px 90px rgba(2,8,20,0.65), 0 0 60px ' + brand.accentColor + '22',
+              backdropFilter: "blur(20px)",
+              boxShadow: "0 40px 90px rgba(2,8,20,0.65), 0 0 60px " + brand.accentColor + "22",
             }}
           >
             <div className="flex items-start justify-between gap-4 px-6 pt-6 sm:px-8 sm:pt-7">
@@ -712,7 +874,7 @@ export default function Screen() {
                   className="text-[11px] font-semibold uppercase tracking-[0.18em]"
                   style={{ color: brand.primaryColor }}
                 >
-                  {isNew ? 'Create' : 'Edit'} · {PERIOD_LABEL}
+                  {isNew ? "Create" : "Edit"} · {PERIOD_LABEL}
                 </p>
                 <h2
                   id="np-editor-title"
@@ -720,8 +882,12 @@ export default function Screen() {
                   style={{ fontFamily: brand.fontHeading, color: TEXT }}
                 >
                   {isNew
-                    ? 'New category'
-                    : 'Edit category — ' + current.name + ' (' + (current.is_default ? 'default' : 'custom') + ')'}
+                    ? "New category"
+                    : "Edit category — " +
+                      current.name +
+                      " (" +
+                      (current.is_default ? "default" : "custom") +
+                      ")"}
                 </h2>
               </div>
               <Button
@@ -730,17 +896,22 @@ export default function Screen() {
                 onClick={closeEditor}
                 className="np-focus np-rowbtn inline-flex h-9 w-9 shrink-0 items-center justify-center"
                 style={{
-                  backgroundColor: 'rgba(255,255,255,0.06)',
+                  backgroundColor: "rgba(255,255,255,0.06)",
                   color: TEXT,
                   border: HAIRLINE,
-                  borderRadius: '999px',
+                  borderRadius: "999px",
                 }}
               >
                 <Icons.X className="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
 
-            <form data-wf="b-3-0" onSubmit={handleSave} noValidate className="px-6 pb-6 pt-6 sm:px-8 sm:pb-8">
+            <form
+              data-wf="b-3-0"
+              onSubmit={handleSave}
+              noValidate
+              className="px-6 pb-6 pt-6 sm:px-8 sm:pb-8"
+            >
               <div className="grid gap-5 sm:grid-cols-2">
                 <div>
                   <Label
@@ -761,20 +932,21 @@ export default function Screen() {
                       if (errors.name) setErrors({ ...errors, name: null });
                     }}
                     placeholder="Groceries"
-                    aria-invalid={errors.name ? 'true' : 'false'}
+                    aria-invalid={errors.name ? "true" : "false"}
                     aria-describedby="np-editor-help"
                     className="np-focus w-full px-4 py-3 text-[15px]"
                     style={{
-                      backgroundColor: !isNew && isDefaultCat ? 'rgba(255,255,255,0.03)' : SURFACE_2,
+                      backgroundColor:
+                        !isNew && isDefaultCat ? "rgba(255,255,255,0.03)" : SURFACE_2,
                       color: !isNew && isDefaultCat ? brand.neutralColor : TEXT,
-                      border: '1px solid ' + (errors.name ? TONE.over : 'rgba(255,255,255,0.14)'),
+                      border: "1px solid " + (errors.name ? TONE.over : "rgba(255,255,255,0.14)"),
                       borderRadius: brand.radius,
                     }}
                   />
                   <p className="mt-2 text-[12px]" style={{ color: brand.neutralColor }}>
                     {!isNew && isDefaultCat
-                      ? 'Default categories keep their names — only custom ones can be renamed.'
-                      : 'Shown everywhere this category appears.'}
+                      ? "Default categories keep their names — only custom ones can be renamed."
+                      : "Shown everywhere this category appears."}
                   </p>
                 </div>
 
@@ -805,15 +977,16 @@ export default function Screen() {
                         if (errors.budget) setErrors({ ...errors, budget: null });
                       }}
                       placeholder="650.00"
-                      aria-invalid={errors.budget ? 'true' : 'false'}
+                      aria-invalid={errors.budget ? "true" : "false"}
                       aria-describedby="np-editor-help"
                       className="np-focus w-full py-3 pl-9 pr-4 text-[15px]"
                       style={{
                         backgroundColor: SURFACE_2,
                         color: TEXT,
-                        border: '1px solid ' + (errors.budget ? TONE.over : 'rgba(255,255,255,0.14)'),
+                        border:
+                          "1px solid " + (errors.budget ? TONE.over : "rgba(255,255,255,0.14)"),
                         borderRadius: brand.radius,
-                        fontVariantNumeric: 'tabular-nums',
+                        fontVariantNumeric: "tabular-nums",
                       }}
                     />
                   </div>
@@ -830,14 +1003,14 @@ export default function Screen() {
                 aria-live="polite"
                 className="mt-6 rounded-2xl px-4 py-3 text-[13px] leading-relaxed"
                 style={{
-                  backgroundColor: 'rgba(255,255,255,0.05)',
+                  backgroundColor: "rgba(255,255,255,0.05)",
                   border:
-                    '1px solid ' +
+                    "1px solid " +
                     (errors.name || errors.budget
-                      ? TONE.over + '66'
+                      ? TONE.over + "66"
                       : editor.pendingDelete
-                      ? TONE.near + '66'
-                      : 'rgba(255,255,255,0.12)'),
+                        ? TONE.near + "66"
+                        : "rgba(255,255,255,0.12)"),
                   borderRadius: brand.radius,
                 }}
               >
@@ -861,14 +1034,14 @@ export default function Screen() {
                     <Icons.AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                     <span>
                       Deleting “{current.name}” affects {current.expense_count} existing expense
-                      {current.expense_count === 1 ? '' : 's'} — confirm to continue. Choose{' '}
+                      {current.expense_count === 1 ? "" : "s"} — confirm to continue. Choose{" "}
                       <strong>Confirm delete</strong> again to remove it, or press Esc to keep it.
                     </span>
                   </p>
                 ) : (
                   <p style={{ color: brand.neutralColor }}>
-                    Name cannot be blank or duplicate another of your categories. A budget must be a number greater
-                    than zero.
+                    Name cannot be blank or duplicate another of your categories. A budget must be a
+                    number greater than zero.
                   </p>
                 )}
               </div>
@@ -882,20 +1055,27 @@ export default function Screen() {
                   className="np-focus inline-flex items-center justify-center gap-2 px-4 py-3 text-[15px] font-bold"
                   style={{
                     background: saving
-                      ? 'rgba(255,255,255,0.12)'
-                      : 'linear-gradient(100deg, ' + brand.primaryColor + ', ' + brand.accentColor + ')',
+                      ? "rgba(255,255,255,0.12)"
+                      : "linear-gradient(100deg, " +
+                        brand.primaryColor +
+                        ", " +
+                        brand.accentColor +
+                        ")",
                     color: saving ? brand.neutralColor : brand.backgroundColor,
-                    border: 'none',
+                    border: "none",
                     borderRadius: brand.radius,
-                    boxShadow: saving ? 'none' : '0 16px 40px ' + brand.accentColor + '45',
-                    cursor: saving ? 'progress' : 'pointer',
+                    boxShadow: saving ? "none" : "0 16px 40px " + brand.accentColor + "45",
+                    cursor: saving ? "progress" : "pointer",
                   }}
                 >
                   {saving ? (
                     <>
                       <span
                         className="np-spin inline-block h-4 w-4 rounded-full"
-                        style={{ border: '2px solid rgba(255,255,255,0.3)', borderTopColor: brand.primaryColor }}
+                        style={{
+                          border: "2px solid rgba(255,255,255,0.3)",
+                          borderTopColor: brand.primaryColor,
+                        }}
                         aria-hidden="true"
                       />
                       Saving…
@@ -915,11 +1095,17 @@ export default function Screen() {
                   disabled={isNew || !current || current.monthly_amount === null || saving}
                   className="np-focus np-rowbtn inline-flex items-center justify-center gap-2 px-4 py-3 text-[14px] font-semibold"
                   style={{
-                    backgroundColor: 'rgba(255,255,255,0.06)',
-                    color: isNew || !current || current.monthly_amount === null ? 'rgba(159,180,208,0.5)' : TEXT,
+                    backgroundColor: "rgba(255,255,255,0.06)",
+                    color:
+                      isNew || !current || current.monthly_amount === null
+                        ? "rgba(159,180,208,0.5)"
+                        : TEXT,
                     border: HAIRLINE,
                     borderRadius: brand.radius,
-                    cursor: isNew || !current || current.monthly_amount === null ? 'not-allowed' : 'pointer',
+                    cursor:
+                      isNew || !current || current.monthly_amount === null
+                        ? "not-allowed"
+                        : "pointer",
                   }}
                 >
                   <Icons.X className="h-4 w-4" aria-hidden="true" />
@@ -933,26 +1119,33 @@ export default function Screen() {
                   disabled={isNew || isDefaultCat || saving}
                   className="np-focus inline-flex items-center justify-center gap-2 px-4 py-3 text-[14px] font-semibold"
                   style={{
-                    backgroundColor: editor.pendingDelete ? TONE.over : 'rgba(255,255,255,0.04)',
-                    color: isNew || isDefaultCat ? 'rgba(159,180,208,0.5)' : editor.pendingDelete ? brand.backgroundColor : TONE.over,
-                    border: '1px solid ' + (isNew || isDefaultCat ? 'rgba(255,255,255,0.12)' : TONE.over + '66'),
+                    backgroundColor: editor.pendingDelete ? TONE.over : "rgba(255,255,255,0.04)",
+                    color:
+                      isNew || isDefaultCat
+                        ? "rgba(159,180,208,0.5)"
+                        : editor.pendingDelete
+                          ? brand.backgroundColor
+                          : TONE.over,
+                    border:
+                      "1px solid " +
+                      (isNew || isDefaultCat ? "rgba(255,255,255,0.12)" : TONE.over + "66"),
                     borderRadius: brand.radius,
-                    cursor: isNew || isDefaultCat ? 'not-allowed' : 'pointer',
+                    cursor: isNew || isDefaultCat ? "not-allowed" : "pointer",
                   }}
                 >
                   <Icons.Trash className="h-4 w-4" aria-hidden="true" />
-                  {editor.pendingDelete ? 'Confirm delete' : 'Delete category'}
+                  {editor.pendingDelete ? "Confirm delete" : "Delete category"}
                 </Button>
               </div>
 
               {isDefaultCat && !isNew ? (
                 <p className="mt-3 text-[12px]" style={{ color: brand.neutralColor }}>
-                  “{current.name}” is one of your default categories — you can budget it, but it can’t be renamed or
-                  deleted.
+                  “{current.name}” is one of your default categories — you can budget it, but it
+                  can’t be renamed or deleted.
                 </p>
               ) : null}
 
-              <div className="mt-6" style={{ borderTop: '1px solid rgba(255,255,255,0.10)' }} />
+              <div className="mt-6" style={{ borderTop: "1px solid rgba(255,255,255,0.10)" }} />
 
               {/* Row 7 — link through to the expense list */}
               <div className="mt-4">
@@ -960,18 +1153,19 @@ export default function Screen() {
                   <button
                     data-wf="b-6-0"
                     type="button"
-                    onClick={() => navigate('expenses')}
+                    onClick={() => navigate("expenses")}
                     className="np-focus np-link inline-flex items-center gap-1.5 text-[14px] font-semibold underline underline-offset-4"
-                    style={{ color: brand.primaryColor, borderRadius: '8px' }}
+                    style={{ color: brand.primaryColor, borderRadius: "8px" }}
                   >
-                    View the {current.expense_count} expense{current.expense_count === 1 ? '' : 's'} in {current.name}
+                    View the {current.expense_count} expense{current.expense_count === 1 ? "" : "s"}{" "}
+                    in {current.name}
                     <Icons.ChevronRight className="h-4 w-4" aria-hidden="true" />
                   </button>
                 ) : (
                   <p data-wf="b-6-0" className="text-[13px]" style={{ color: brand.neutralColor }}>
                     {isNew
-                      ? 'Once you save, this category appears when you add an expense and you can jump to its expenses from here.'
-                      : 'No expenses in this category yet — add one and it will be listed here.'}
+                      ? "Once you save, this category appears when you add an expense and you can jump to its expenses from here."
+                      : "No expenses in this category yet — add one and it will be listed here."}
                   </p>
                 )}
               </div>

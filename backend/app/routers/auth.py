@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import User, UserSession
+from app.models import Category, User, UserSession
 from app.schemas import AuthResponse, LoginRequest, MeOut, SignupRequest, StubResponse, UserOut
 from app.security import generate_session_token, hash_password, verify_password
 
@@ -20,6 +20,19 @@ router = APIRouter(tags=["auth"])
 # The account currency a brand-new account has not been asked to choose yet;
 # `PATCH /me/currency` (a later ticket) is how a real sign-up changes it.
 _DEFAULT_CURRENCY = "USD"
+
+# Provisioned for every new account (US-009-1, AC-016) so they are selectable
+# immediately after sign-up, before the user creates a single category of their own.
+_DEFAULT_CATEGORIES = [
+    "Groceries",
+    "Transport",
+    "Eating out",
+    "Housing",
+    "Utilities",
+    "Entertainment",
+    "Health",
+    "Other",
+]
 
 # A session's absolute lifetime cap. SESSION_IDLE_MINUTES (app/dependencies.py)
 # is what actually ends a session early when it sits idle.
@@ -57,6 +70,10 @@ async def signup(payload: SignupRequest, db: Session = Depends(get_db)) -> AuthR
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    for name in _DEFAULT_CATEGORIES:
+        db.add(Category(user_id=user.id, name=name, is_default=True))
+    db.commit()
 
     token = _create_session(db, user.id)
     return AuthResponse(token=token, user=UserOut(id=user.id, email=user.email))

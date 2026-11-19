@@ -20,7 +20,7 @@ column or a functional index on `lower(email)`) when a ticket needs it.
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -97,6 +97,16 @@ class Category(Base):
     alerts: Mapped[list["Alert"]] = relationship(
         back_populates="category", cascade="all, delete-orphan"
     )
+
+
+# A case-insensitive unique constraint per owner: two categories named "Food" and
+# "food" for the same user collide, but each user has their own namespace.
+Index(
+    "ix_categories_user_id_lower_name",
+    Category.user_id,
+    func.lower(Category.name),
+    unique=True,
+)
 
 
 class Expense(Base):
