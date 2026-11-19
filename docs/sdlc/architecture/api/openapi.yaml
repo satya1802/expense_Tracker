@@ -2,6 +2,511 @@
 openapi: 3.1.0
 info:
   title: Expense Tracker
-  version: architecture-v0
+  version: architecture-v1
   description: Designed API from the approved architecture (not extracted from code).
-paths: {}
+paths:
+  /alerts:
+    get:
+      summary: List in-app near-/over-budget alerts for the signed-in user.
+      description: List in-app near-/over-budget alerts for the signed-in user.
+      operationId: get_alerts
+      parameters: []
+      responses:
+        '200':
+          description: 200 [ { id, category_id, status, period_month, is_read } ]
+      security:
+      - bearerAuth: []
+  /alerts/{id}/read:
+    post:
+      summary: Mark an in-app alert as read.
+      description: Mark an in-app alert as read.
+      operationId: post_alerts_id_read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              description: empty
+      responses:
+        '200':
+          description: 204 no content
+      security:
+      - bearerAuth: []
+  /auth/login:
+    post:
+      summary: Verify credentials and issue an opaque session token in the body; generic
+        error on failure.
+      description: Verify credentials and issue an opaque session token in the body;
+        generic error on failure.
+      operationId: post_auth_login
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              description: '{ email, password }'
+      responses:
+        '200':
+          description: '200 { token, expires_at, user: { id, email, currency_code
+            } } | 401 invalid credentials'
+  /auth/logout:
+    post:
+      summary: Revoke the current session token so it can no longer be used.
+      description: Revoke the current session token so it can no longer be used.
+      operationId: post_auth_logout
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              description: empty
+      responses:
+        '200':
+          description: 204 no content
+      security:
+      - bearerAuth: []
+  /auth/signup:
+    post:
+      summary: Create an account with unique email and a password meeting minimum
+        requirements; seeds default categories; sends verific
+      description: Create an account with unique email and a password meeting minimum
+        requirements; seeds default categories; sends verification email.
+      operationId: post_auth_signup
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              description: '{ email, password, currency_code }'
+      responses:
+        '200':
+          description: 201 { user_id, email } | 409 email already in use | 422 validation
+            error
+  /budgets:
+    get:
+      summary: List the user's category monthly budgets.
+      description: List the user's category monthly budgets.
+      operationId: get_budgets
+      parameters: []
+      responses:
+        '200':
+          description: 200 [ { category_id, monthly_amount } ]
+      security:
+      - bearerAuth: []
+  /budgets/{category_id}:
+    put:
+      summary: Set or update a positive monthly budget for a category.
+      description: Set or update a positive monthly budget for a category.
+      operationId: put_budgets_category_id
+      parameters:
+      - name: category_id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              description: '{ monthly_amount }'
+      responses:
+        '200':
+          description: 200 { category_id, monthly_amount } | 422 non-positive
+      security:
+      - bearerAuth: []
+    delete:
+      summary: Remove a category budget so it stops showing status and generating
+        alerts.
+      description: Remove a category budget so it stops showing status and generating
+        alerts.
+      operationId: delete_budgets_category_id
+      parameters:
+      - name: category_id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 204 removed | 404 not found
+      security:
+      - bearerAuth: []
+  /categories:
+    get:
+      summary: List the signed-in user's default and custom categories.
+      description: List the signed-in user's default and custom categories.
+      operationId: get_categories
+      parameters: []
+      responses:
+        '200':
+          description: 200 [ { id, name, is_default } ]
+      security:
+      - bearerAuth: []
+    post:
+      summary: Create a custom category with a non-blank, non-duplicate name.
+      description: Create a custom category with a non-blank, non-duplicate name.
+      operationId: post_categories
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              description: '{ name }'
+      responses:
+        '200':
+          description: 201 { id, name } | 422 blank or duplicate name
+      security:
+      - bearerAuth: []
+  /categories/{id}:
+    patch:
+      summary: Rename a custom category to a valid non-duplicate name.
+      description: Rename a custom category to a valid non-duplicate name.
+      operationId: patch_categories_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              description: '{ name }'
+      responses:
+        '200':
+          description: 200 { id, name } | 422 invalid | 404 not found
+      security:
+      - bearerAuth: []
+    delete:
+      summary: Delete a custom category; requires confirm flag when it is used by
+        existing expenses.
+      description: Delete a custom category; requires confirm flag when it is used
+        by existing expenses.
+      operationId: delete_categories_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 204 deleted | 409 in use requires confirm | 404 not found
+      security:
+      - bearerAuth: []
+  /dashboard:
+    get:
+      summary: Budget-versus-spending status for the current month per category (budget,
+        spent, under/near/over); unbudgeted categories
+      description: Budget-versus-spending status for the current month per category
+        (budget, spent, under/near/over); unbudgeted categories show spending only.
+      operationId: get_dashboard
+      parameters: []
+      responses:
+        '200':
+          description: '200 { month, categories: [ { category_id, name, budget, spent,
+            status } ] }'
+      security:
+      - bearerAuth: []
+  /expenses:
+    get:
+      summary: List the user's expenses ordered recent-first, filterable by category
+        and date range.
+      description: List the user's expenses ordered recent-first, filterable by category
+        and date range.
+      operationId: get_expenses
+      parameters: []
+      responses:
+        '200':
+          description: 200 [ { id, amount, category_id, spent_on, note } ]
+      security:
+      - bearerAuth: []
+    post:
+      summary: Create a validated expense; triggers budget evaluation for the category
+        and month.
+      description: Create a validated expense; triggers budget evaluation for the
+        category and month.
+      operationId: post_expenses
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              description: '{ amount, category_id, spent_on, note? }'
+      responses:
+        '200':
+          description: 201 { id, amount, category_id, spent_on, budget_status } |
+            422 validation error
+      security:
+      - bearerAuth: []
+  /expenses/export:
+    get:
+      summary: Export the signed-in user's expenses as a CSV of amount, category and
+        date.
+      description: Export the signed-in user's expenses as a CSV of amount, category
+        and date.
+      operationId: get_expenses_export
+      parameters: []
+      responses:
+        '200':
+          description: 200 text/csv (only this account's data)
+      security:
+      - bearerAuth: []
+  /expenses/{id}:
+    patch:
+      summary: Update amount, category or date of an expense; re-evaluates affected
+        budget status.
+      description: Update amount, category or date of an expense; re-evaluates affected
+        budget status.
+      operationId: patch_expenses_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              description: '{ amount?, category_id?, spent_on? }'
+      responses:
+        '200':
+          description: 200 { id, ... } | 422 invalid | 404 not found
+      security:
+      - bearerAuth: []
+    delete:
+      summary: Delete an expense so it no longer counts toward budgets or summary.
+      description: Delete an expense so it no longer counts toward budgets or summary.
+      operationId: delete_expenses_id
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 204 deleted | 404 not found
+      security:
+      - bearerAuth: []
+  /me:
+    get:
+      summary: Return the signed-in user's profile and account currency.
+      description: Return the signed-in user's profile and account currency.
+      operationId: get_me
+      parameters: []
+      responses:
+        '200':
+          description: 200 { id, email, currency_code }
+      security:
+      - bearerAuth: []
+  /me/currency:
+    patch:
+      summary: Set the single account currency used to display all amounts.
+      description: Set the single account currency used to display all amounts.
+      operationId: patch_me_currency
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              description: '{ currency_code }'
+      responses:
+        '200':
+          description: 200 { currency_code } | 422 invalid currency
+      security:
+      - bearerAuth: []
+  /summary:
+    get:
+      summary: Total spending and per-category breakdown for the selected month in
+        account currency.
+      description: Total spending and per-category breakdown for the selected month
+        in account currency.
+      operationId: get_summary
+      parameters: []
+      responses:
+        '200':
+          description: '200 { month, currency_code, total, by_category: [ { category_id,
+            name, total } ] }'
+      security:
+      - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    users:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        password_hash:
+          type: string
+        currency_code:
+          type: string
+        email_verified:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - email
+      - password_hash
+      - currency_code
+      - email_verified
+      - created_at
+    sessions:
+      type: object
+      properties:
+        token:
+          type: string
+        user_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type: string
+          format: date-time
+      required:
+      - token
+      - user_id
+      - created_at
+      - expires_at
+    categories:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        is_default:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - user_id
+      - name
+      - is_default
+      - created_at
+    expenses:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        category_id:
+          type: string
+          format: uuid
+        amount:
+          type: number
+        spent_on:
+          type: string
+          format: date
+        note:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - user_id
+      - category_id
+      - amount
+      - spent_on
+      - created_at
+    budgets:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        category_id:
+          type: string
+          format: uuid
+        monthly_amount:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - user_id
+      - category_id
+      - monthly_amount
+      - created_at
+      - updated_at
+    alerts:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        category_id:
+          type: string
+          format: uuid
+        period_month:
+          type: string
+          format: date
+        status:
+          type: string
+        email_sent:
+          type: boolean
+        is_read:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - id
+      - user_id
+      - category_id
+      - period_month
+      - status
+      - email_sent
+      - is_read
+      - created_at
