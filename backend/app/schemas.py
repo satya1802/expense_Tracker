@@ -37,14 +37,20 @@ class SignupRequest(BaseModel):
     email: str
     password: str = Field(min_length=8)
 
-    _validate_email = field_validator("email")(classmethod(lambda cls, v: _validate_email(v)))
+    @field_validator("email")
+    @classmethod
+    def _check_email(cls, v: str) -> str:
+        return _validate_email(v)
 
 
 class LoginRequest(BaseModel):
     email: str
     password: str
 
-    _validate_email = field_validator("email")(classmethod(lambda cls, v: _validate_email(v)))
+    @field_validator("email")
+    @classmethod
+    def _check_email(cls, v: str) -> str:
+        return _validate_email(v)
 
 
 class UserOut(BaseModel):

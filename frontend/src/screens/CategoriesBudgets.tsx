@@ -1,5 +1,4 @@
 // @ts-nocheck -- generated from the approved design under its JS runtime contract; not hand-written TypeScript.
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import React from "react";
 
 import * as UI from "@/lib/ui";
@@ -27,8 +26,6 @@ const {
   TD,
   Empty,
 } = UI;
-
-const { Edit } = Icons;
 
 const PERIOD_LABEL = "November 2026";
 const CURRENCY_CODE = "USD";
