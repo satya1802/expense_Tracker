@@ -10,11 +10,15 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app import models  # noqa: F401 -- imported so the tables register before create_all
-from app.database import Base, engine
+from app.database import Base, SessionLocal, engine
+from app.routers import api_router
+from app.seed import seed_bootstrap_users
 
 
 @asynccontextmanager
@@ -29,6 +33,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     read the error, not while pytest collects the files.
     """
     Base.metadata.create_all(bind=engine)
+    # Seeds the platform's bootstrap admin / smoke-test accounts, if it set their
+    # env vars (see app/seed.py). Locally and under pytest neither is set, so this
+    # is a no-op there.
+    db = SessionLocal()
+    try:
+        seed_bootstrap_users(db)
+    finally:
+        db.close()
     yield
 
 
@@ -54,7 +66,26 @@ app.add_middleware(
 )
 
 
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    """A per-field {field, message} list rather than FastAPI's default {loc, msg,
+    type} shape, so the SPA can show "what to fix" against the field that needs it."""
+    errors = []
+    for err in exc.errors():
+        loc = [str(part) for part in err["loc"] if part != "body"]
+        errors.append({"field": ".".join(loc) or "body", "message": err["msg"]})
+    return JSONResponse(status_code=422, content={"detail": errors})
+
+
 @app.get("/health")
 async def health() -> dict[str, str]:
     """Liveness probe, and the only route here that is not a stub."""
     return {"status": "ok"}
+
+
+# One router per architecture component that owns endpoints (app/routers/__init__.py),
+# one route per endpoint the approved api_spec declares. Every route is a stub today;
+# the development sprint replaces each one's body, one ticket at a time.
+app.include_router(api_router)

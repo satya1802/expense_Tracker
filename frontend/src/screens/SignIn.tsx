@@ -1,19 +1,26 @@
 // @ts-nocheck -- generated from the approved design under its JS runtime contract; not hand-written TypeScript.
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import React from "react";
 
 import * as UI from "@/lib/ui";
 import { Icons } from "@/lib/icons";
 import { brand } from "@/lib/brand";
 import { useNavigate } from "@/lib/navigate";
+import { ApiError, apiFetch, setSessionToken } from "@/lib/api";
+import { SESSION_EXPIRED_KEY } from "@/App";
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const { Button, Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, Input, Label, Separator } = UI;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const { Check } = Icons;
+const {
+  Button,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
+  Input,
+  Label,
+  Separator,
+} = UI;
 
-const REMEMBERED_EMAIL = "rowan.hale@fastmail.com";
-const SESSION_ENDED_AT = "19 Nov 2026, 14:32";
 const SESSION_LIFETIME = "30 minutes";
 
 const ASSURANCES = [
@@ -21,20 +28,20 @@ const ASSURANCES = [
     key: "budgets",
     Icon: Icons.Calendar,
     title: "Monthly budgets, per category",
-    body: "Groceries, Transport, Eating out — each with its own ceiling, counted fresh on the 1st."
+    body: "Groceries, Transport, Eating out — each with its own ceiling, counted fresh on the 1st.",
   },
   {
     key: "alerts",
     Icon: Icons.AlertCircle,
     title: "Near-budget alerts, not post-mortems",
-    body: "A nudge in the app and in your inbox while there is still something left to do about it."
+    body: "A nudge in the app and in your inbox while there is still something left to do about it.",
   },
   {
     key: "export",
     Icon: Icons.Download,
     title: "Your ledger, exportable",
-    body: "Every expense — amount, category, date — out as CSV the moment you ask for it."
-  }
+    body: "Every expense — amount, category, date — out as CSV the moment you ask for it.",
+  },
 ];
 
 // Signature motif: a 7-day spending pulse, drawn as a neon ledger line.
@@ -42,22 +49,29 @@ const PULSE_POINTS = "0,34 18,30 34,36 48,14 62,38 78,22 94,30 110,8 126,32 142,
 
 export default function Screen() {
   const navigate = useNavigate();
-  const [email, setEmail] = React.useState(REMEMBERED_EMAIL);
+  const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
   const [fieldErrors, setFieldErrors] = React.useState({});
-  const [formError, setFormError] = React.useState(null); // 'credentials' | 'offline'
-  const [attempts, setAttempts] = React.useState(0);
+  const [formError, setFormError] = React.useState(null); // 'credentials' | 'offline' | 'error'
   const [status, setStatus] = React.useState("idle"); // idle | checking | success
   const [online, setOnline] = React.useState(true);
-  const [sessionNoticeOpen, setSessionNoticeOpen] = React.useState(true);
+  const [sessionNoticeOpen, setSessionNoticeOpen] = React.useState(false);
 
   const emailRef = React.useRef(null);
   const passwordRef = React.useRef(null);
-  const timers = React.useRef([]);
 
+  // AC-007: a redirect the app itself triggered (a 401 from a protected call)
+  // leaves a one-shot flag behind; show the notice once, then clear it.
   React.useEffect(() => {
-    return () => timers.current.forEach(clearTimeout);
+    try {
+      if (sessionStorage.getItem(SESSION_EXPIRED_KEY)) {
+        setSessionNoticeOpen(true);
+        sessionStorage.removeItem(SESSION_EXPIRED_KEY);
+      }
+    } catch {
+      // No storage: no notice to show.
+    }
   }, []);
 
   React.useEffect(() => {
@@ -90,7 +104,7 @@ export default function Screen() {
     return next;
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     if (busy || done) return;
 
@@ -110,23 +124,25 @@ export default function Screen() {
 
     setFormError(null);
     setStatus("checking");
-    timers.current.push(
-      window.setTimeout(() => {
-        // Credentials are checked on the server; this prototype accepts any
-        // password of 8 characters or more for the remembered account.
-        if (password.length < 8) {
-          setStatus("idle");
-          setFormError("credentials");
-          setAttempts((n) => n + 1);
-          if (passwordRef.current) passwordRef.current.focus();
-          return;
-        }
-        setStatus("success");
-        timers.current.push(
-          window.setTimeout(() => navigate("dashboard"), 850)
-        );
-      }, 1000)
-    );
+    try {
+      const result = await apiFetch("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+      setSessionToken(result.token);
+      setStatus("success");
+      navigate("dashboard");
+    } catch (err) {
+      setStatus("idle");
+      if (err instanceof ApiError && err.status === 401) {
+        // Never reveal which field was wrong (NFR-002): one generic message,
+        // regardless of whether the email or the password was the problem.
+        setFormError("credentials");
+        if (passwordRef.current) passwordRef.current.focus();
+      } else {
+        setFormError("error");
+      }
+    }
   };
 
   const css = `
@@ -186,7 +202,7 @@ export default function Screen() {
       style={{
         backgroundColor: brand.backgroundColor,
         fontFamily: brand.fontBody,
-        color: "#ffffff"
+        color: "#ffffff",
       }}
     >
       <style>{css}</style>
@@ -195,14 +211,16 @@ export default function Screen() {
       <div
         aria-hidden="true"
         className="np-glow pointer-events-none absolute -left-40 -top-48 h-[34rem] w-[34rem] rounded-full blur-3xl"
-        style={{ background: `radial-gradient(circle, ${brand.primaryColor}33 0%, transparent 68%)` }}
+        style={{
+          background: `radial-gradient(circle, ${brand.primaryColor}33 0%, transparent 68%)`,
+        }}
       />
       <div
         aria-hidden="true"
         className="np-glow pointer-events-none absolute -bottom-56 -right-32 h-[38rem] w-[38rem] rounded-full blur-3xl"
         style={{
           background: `radial-gradient(circle, ${brand.accentColor}2e 0%, transparent 66%)`,
-          animationDelay: "2.5s"
+          animationDelay: "2.5s",
         }}
       />
 
@@ -218,7 +236,7 @@ export default function Screen() {
               backgroundColor: glass,
               backdropFilter: "blur(18px)",
               WebkitBackdropFilter: "blur(18px)",
-              boxShadow: "0 48px 120px rgba(2,8,24,0.65)"
+              boxShadow: "0 48px 120px rgba(2,8,24,0.65)",
             }}
           >
             {/* Signature: neon pulse rail across the card head */}
@@ -226,13 +244,15 @@ export default function Screen() {
               aria-hidden="true"
               className="absolute inset-x-0 top-0 h-[2px] overflow-hidden"
               style={{
-                background: `linear-gradient(90deg, ${brand.primaryColor}, ${brand.accentColor}, ${brand.primaryColor})`
+                background: `linear-gradient(90deg, ${brand.primaryColor}, ${brand.accentColor}, ${brand.primaryColor})`,
               }}
             >
               {busy ? (
                 <div
                   className="np-sweep h-full w-1/2"
-                  style={{ background: "linear-gradient(90deg, transparent, #ffffff, transparent)" }}
+                  style={{
+                    background: "linear-gradient(90deg, transparent, #ffffff, transparent)",
+                  }}
                 />
               ) : null}
             </div>
@@ -260,11 +280,12 @@ export default function Screen() {
               {sessionNoticeOpen ? (
                 <div
                   data-wf="b-1-0"
+                  role="status"
                   className="np-rise mb-8 flex items-start gap-3 border px-4 py-4 sm:px-5"
                   style={{
                     borderRadius: brand.radius,
                     borderColor: "rgba(34,211,238,0.3)",
-                    backgroundColor: "rgba(34,211,238,0.08)"
+                    backgroundColor: "rgba(34,211,238,0.08)",
                   }}
                 >
                   <Icons.Clock
@@ -274,11 +295,11 @@ export default function Screen() {
                   />
                   <div className="min-w-0 flex-1">
                     <p className="text-[14px] leading-relaxed" style={{ color: "#e7f4fb" }}>
-                      Your session has expired after a period of inactivity. Sign in again to open your
-                      expenses, budgets and summary.
+                      Your session has expired, sign in again to open your expenses, budgets and
+                      summary.
                     </p>
                     <p className="mt-2 text-[12px]" style={{ color: brand.neutralColor }}>
-                      Session ended {SESSION_ENDED_AT} · sessions last {SESSION_LIFETIME} idle
+                      Sessions last {SESSION_LIFETIME} idle
                     </p>
                   </div>
                   <button
@@ -296,20 +317,13 @@ export default function Screen() {
               {/* ——— Form ——— */}
               <form data-wf="b-2-0" onSubmit={handleSubmit} noValidate className="space-y-6">
                 <div>
-                  <div className="flex items-baseline justify-between gap-3">
-                    <Label
-                      htmlFor="signin-email"
-                      className="text-[12px] font-semibold uppercase tracking-[0.14em]"
-                      style={{ color: brand.neutralColor }}
-                    >
-                      Email address
-                    </Label>
-                    {email === REMEMBERED_EMAIL ? (
-                      <span className="text-[12px]" style={{ color: brand.neutralColor }}>
-                        Last signed in here
-                      </span>
-                    ) : null}
-                  </div>
+                  <Label
+                    htmlFor="signin-email"
+                    className="text-[12px] font-semibold uppercase tracking-[0.14em]"
+                    style={{ color: brand.neutralColor }}
+                  >
+                    Email address
+                  </Label>
                   <Input
                     id="signin-email"
                     data-wf="i-2-0-0"
@@ -332,7 +346,7 @@ export default function Screen() {
                       borderRadius: brand.radius,
                       borderColor: line,
                       backgroundColor: "rgba(255,255,255,0.05)",
-                      color: "#ffffff"
+                      color: "#ffffff",
                     }}
                   />
                   {fieldErrors.email ? (
@@ -363,22 +377,24 @@ export default function Screen() {
                       type={showPassword ? "text" : "password"}
                       name="password"
                       autoComplete="current-password"
-                      placeholder="<your-password>"
                       value={password}
                       disabled={busy || done}
                       onChange={(e) => {
                         setPassword(e.target.value);
-                        if (fieldErrors.password) setFieldErrors((p) => ({ ...p, password: undefined }));
+                        if (fieldErrors.password)
+                          setFieldErrors((p) => ({ ...p, password: undefined }));
                         if (formError === "credentials") setFormError(null);
                       }}
-                      aria-invalid={fieldErrors.password || formError === "credentials" ? "true" : "false"}
+                      aria-invalid={
+                        fieldErrors.password || formError === "credentials" ? "true" : "false"
+                      }
                       aria-describedby={fieldErrors.password ? "signin-password-error" : undefined}
                       className="np-input h-12 w-full border pl-4 pr-[5.5rem] text-[15px]"
                       style={{
                         borderRadius: brand.radius,
                         borderColor: line,
                         backgroundColor: "rgba(255,255,255,0.05)",
-                        color: "#ffffff"
+                        color: "#ffffff",
                       }}
                     />
                     <button
@@ -412,7 +428,7 @@ export default function Screen() {
                       style={{
                         borderRadius: brand.radius,
                         borderColor: "rgba(232,121,249,0.42)",
-                        backgroundColor: "rgba(232,121,249,0.1)"
+                        backgroundColor: "rgba(232,121,249,0.1)",
                       }}
                     >
                       <Icons.AlertCircle
@@ -422,12 +438,13 @@ export default function Screen() {
                       />
                       <div>
                         <p className="text-[14px] font-semibold" style={{ color: "#ffffff" }}>
-                          Invalid email or password.
+                          Invalid email or password
                         </p>
-                        <p className="mt-1 text-[13px] leading-relaxed" style={{ color: brand.neutralColor }}>
-                          {attempts >= 2
-                            ? "Still no luck? Check for a stray space, confirm caps lock is off — or create a new account below."
-                            : "We don't say which one was wrong; that keeps your account safer. Your email is still filled in."}
+                        <p
+                          className="mt-1 text-[13px] leading-relaxed"
+                          style={{ color: brand.neutralColor }}
+                        >
+                          We don't say which one was wrong; that keeps your account safer.
                         </p>
                       </div>
                     </div>
@@ -439,7 +456,7 @@ export default function Screen() {
                       style={{
                         borderRadius: brand.radius,
                         borderColor: "rgba(159,180,208,0.35)",
-                        backgroundColor: "rgba(159,180,208,0.1)"
+                        backgroundColor: "rgba(159,180,208,0.1)",
                       }}
                     >
                       <Icons.AlertCircle
@@ -451,10 +468,34 @@ export default function Screen() {
                         <p className="text-[14px] font-semibold" style={{ color: "#ffffff" }}>
                           You're offline, so we can't check your sign-in.
                         </p>
-                        <p className="mt-1 text-[13px] leading-relaxed" style={{ color: brand.neutralColor }}>
-                          Your email and password are kept exactly as typed. Reconnect and press Sign in again.
+                        <p
+                          className="mt-1 text-[13px] leading-relaxed"
+                          style={{ color: brand.neutralColor }}
+                        >
+                          Your email and password are kept exactly as typed. Reconnect and press
+                          Sign in again.
                         </p>
                       </div>
+                    </div>
+                  ) : null}
+
+                  {formError === "error" ? (
+                    <div
+                      className="np-rise flex items-start gap-3 border px-4 py-4"
+                      style={{
+                        borderRadius: brand.radius,
+                        borderColor: "rgba(159,180,208,0.35)",
+                        backgroundColor: "rgba(159,180,208,0.1)",
+                      }}
+                    >
+                      <Icons.AlertCircle
+                        aria-hidden="true"
+                        className="mt-[2px] h-[18px] w-[18px] shrink-0"
+                        style={{ color: brand.neutralColor }}
+                      />
+                      <p className="text-[14px]" style={{ color: "#e7f4fb" }}>
+                        Something went wrong reaching the server. Please try again.
+                      </p>
                     </div>
                   ) : null}
 
@@ -464,7 +505,7 @@ export default function Screen() {
                       style={{
                         borderRadius: brand.radius,
                         borderColor: "rgba(34,211,238,0.42)",
-                        backgroundColor: "rgba(34,211,238,0.1)"
+                        backgroundColor: "rgba(34,211,238,0.1)",
                       }}
                     >
                       <Icons.CheckCircle
@@ -473,7 +514,7 @@ export default function Screen() {
                         style={{ color: brand.primaryColor }}
                       />
                       <p className="text-[14px]" style={{ color: "#e7f4fb" }}>
-                        Signed in. Opening your dashboard for November.
+                        Signed in. Opening your dashboard.
                       </p>
                     </div>
                   ) : null}
@@ -491,7 +532,7 @@ export default function Screen() {
                       border: "none",
                       color: brand.backgroundColor,
                       background: `linear-gradient(100deg, ${brand.primaryColor} 0%, ${brand.accentColor} 100%)`,
-                      boxShadow: "0 14px 40px rgba(34,211,238,0.26)"
+                      boxShadow: "0 14px 40px rgba(34,211,238,0.26)",
                     }}
                   >
                     {busy ? (
@@ -501,7 +542,7 @@ export default function Screen() {
                           className="np-spin h-4 w-4 rounded-full border-2"
                           style={{
                             borderColor: "rgba(6,20,43,0.3)",
-                            borderTopColor: brand.backgroundColor
+                            borderTopColor: brand.backgroundColor,
                           }}
                         />
                         Checking your details…
@@ -539,20 +580,35 @@ export default function Screen() {
                 <div style={{ borderTop: `1px solid ${line}` }}>
                   <Separator className="opacity-0" />
                 </div>
-                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-5 text-[12px]" style={{ color: brand.neutralColor }}>
+                <div
+                  className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-5 text-[12px]"
+                  style={{ color: brand.neutralColor }}
+                >
                   <span className="inline-flex items-center gap-2">
-                    <Icons.CheckCircle aria-hidden="true" className="h-4 w-4" style={{ color: brand.primaryColor }} />
+                    <Icons.CheckCircle
+                      aria-hidden="true"
+                      className="h-4 w-4"
+                      style={{ color: brand.primaryColor }}
+                    />
                     Passwords are stored hashed, never in plain text
                   </span>
                   <span className="inline-flex items-center gap-2">
                     {online ? (
                       <React.Fragment>
-                        <Icons.Check aria-hidden="true" className="h-4 w-4" style={{ color: brand.primaryColor }} />
+                        <Icons.Check
+                          aria-hidden="true"
+                          className="h-4 w-4"
+                          style={{ color: brand.primaryColor }}
+                        />
                         Connected
                       </React.Fragment>
                     ) : (
                       <React.Fragment>
-                        <Icons.AlertCircle aria-hidden="true" className="h-4 w-4" style={{ color: brand.accentColor }} />
+                        <Icons.AlertCircle
+                          aria-hidden="true"
+                          className="h-4 w-4"
+                          style={{ color: brand.accentColor }}
+                        />
                         Offline — sign-in will retry when you reconnect
                       </React.Fragment>
                     )}
@@ -571,7 +627,7 @@ export default function Screen() {
               className="flex h-10 w-10 items-center justify-center rounded-2xl"
               style={{
                 background: `linear-gradient(140deg, ${brand.primaryColor}, ${brand.accentColor})`,
-                boxShadow: "0 12px 34px rgba(232,121,249,0.3)"
+                boxShadow: "0 12px 34px rgba(232,121,249,0.3)",
               }}
             >
               <Icons.FileText className="h-5 w-5" style={{ color: brand.backgroundColor }} />
@@ -614,7 +670,10 @@ export default function Screen() {
             </svg>
           </div>
 
-          <h2 className="mt-6 text-[26px] font-bold leading-snug sm:text-[28px]" style={{ color: "#ffffff" }}>
+          <h2
+            className="mt-6 text-[26px] font-bold leading-snug sm:text-[28px]"
+            style={{ color: "#ffffff" }}
+          >
             Pick the month back up
             <span style={{ color: brand.accentColor }}> exactly where you left it.</span>
           </h2>
@@ -639,7 +698,10 @@ export default function Screen() {
                     <p className="text-[15px] font-semibold" style={{ color: "#ffffff" }}>
                       {item.title}
                     </p>
-                    <p className="mt-1 text-[13px] leading-relaxed" style={{ color: brand.neutralColor }}>
+                    <p
+                      className="mt-1 text-[13px] leading-relaxed"
+                      style={{ color: brand.neutralColor }}
+                    >
                       {item.body}
                     </p>
                   </div>
@@ -653,13 +715,17 @@ export default function Screen() {
             style={{
               borderRadius: brand.radius,
               borderColor: line,
-              backgroundColor: "rgba(255,255,255,0.04)"
+              backgroundColor: "rgba(255,255,255,0.04)",
             }}
           >
-            <Icons.User aria-hidden="true" className="mt-[2px] h-[18px] w-[18px] shrink-0" style={{ color: brand.accentColor }} />
+            <Icons.User
+              aria-hidden="true"
+              className="mt-[2px] h-[18px] w-[18px] shrink-0"
+              style={{ color: brand.accentColor }}
+            />
             <p className="text-[13px] leading-relaxed" style={{ color: brand.neutralColor }}>
-              One account, one person. Nobody else on this app can open your expenses, categories or budgets —
-              and signing out ends the session on this device straight away.
+              One account, one person. Nobody else on this app can open your expenses, categories or
+              budgets — and signing out ends the session on this device straight away.
             </p>
           </div>
         </section>
