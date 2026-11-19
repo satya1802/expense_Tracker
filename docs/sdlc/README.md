@@ -5,7 +5,7 @@
 <!-- sdlc:auto:start overview -->
 Create a simple expense tracker app
 
-**Documentation version:** v4
+**Documentation version:** v5
 <!-- sdlc:auto:end overview -->
 
 ## Contents
@@ -17,7 +17,7 @@ Create a simple expense tracker app
 | [Architecture](architecture/README.md) | 14 entries |
 | [Planning](planning/README.md) | 12 entries |
 | [Development](development/README.md) | 6 entries |
-| [Testing](testing/README.md) | 0 entries |
+| [Testing](testing/README.md) | 3 entries |
 | [Deployment](deployment/README.md) | 0 entries |
 | [Maintenance](maintenance/README.md) | 0 entries |
 | [Data model](architecture/data-model.md) | generated |
@@ -32,5 +32,5 @@ Create a simple expense tracker app
 | [Runbook](deployment/runbook.md) | not deployed yet |
 | [Release notes](deployment/release-notes.md) | 0 releases |
 | [Traceability matrix](traceability-matrix.md) | 21 requirements |
-| [Changelog](CHANGELOG.md) | 4 versions |
+| [Changelog](CHANGELOG.md) | 5 versions |
 <!-- sdlc:auto:end contents -->
