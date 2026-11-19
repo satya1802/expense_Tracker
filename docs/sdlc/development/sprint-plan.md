@@ -59,6 +59,8 @@ Capacity: 20 points · Committed: 5
 |---|---|---|---|---|---|
 | US-015 | Story | Mobile-friendly responsive layout | 3 | frontend-agent | US-013, US-014, US-020 |
 | US-019 | Story | Export expenses as CSV | 2 | backend-agent | US-005, US-020 |
+| FIX-SEC-docker-s8544-82cfea7f | Story | Fix: Using dependencies without locking resolved versions is security-sensitive. (backend/Dockerfile) | — | — | — |
+| FIX-SEC-githubactions-s7637-9c1e4e26 | Story | Fix: Use full commit SHA hash for this dependency. (.github/workflows/sonar-scan.yml) | — | devops-agent | — |
 
 ## Unscheduled
 

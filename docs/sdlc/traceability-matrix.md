@@ -9,15 +9,15 @@ Built from recorded links, not written by a model: requirement key → plan item
 <!-- sdlc:auto:start matrix -->
 | Requirement | Epic | Title | Plan items | Sprint | Design | Code | Commits | Ticket | Tests | AC tests | Deployed |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| US-001 | EPIC-001 | Sign up with email and password | US-001 | 1 | POST /auth/signup, api, db, users, web | — | — | not started | not run | 0/3 tested · 0/3 passing | — |
-| US-002 | EPIC-001 | Sign in to my account | US-002 | 1 | POST /auth/login, api, db, sessions, users, web | — | — | not started | not run | 0/2 tested · 0/2 passing | — |
-| US-003 | EPIC-001 | Sign out and session expiry | US-003 | 1 | POST /auth/logout, api, db, sessions | — | — | not started | not run | 0/2 tested · 0/2 passing | — |
-| US-004 | EPIC-001 | Private per-account data isolation | US-004 | 1 | GET /me, api, db, sessions, users | — | — | not started | not run | 0/2 tested · 0/2 passing | — |
+| US-001 | EPIC-001 | Sign up with email and password | US-001 | 1 | POST /auth/signup, api, db, users, web | backend/app/dependencies.py, backend/app/main.py, backend/app/models.py, backend/app/routers/alerts.py, backend/app/routers/auth.py +20 more | 7937121 | delivered | succeeded | 3/3 tested · 3/3 passing | — |
+| US-002 | EPIC-001 | Sign in to my account | US-002 | 1 | POST /auth/login, api, db, sessions, users, web | — | 7937121 | delivered | not run | 2/2 tested · 2/2 passing | — |
+| US-003 | EPIC-001 | Sign out and session expiry | US-003 | 1 | POST /auth/logout, api, db, sessions | — | 7937121 | delivered | not run | 2/2 tested · 2/2 passing | — |
+| US-004 | EPIC-001 | Private per-account data isolation | US-004 | 1 | GET /me, api, db, sessions, users | — | 7937121 | delivered | not run | 2/2 tested · 2/2 passing | — |
 | US-005 | EPIC-002 | Log a new expense manually | US-005 | 2 | POST /expenses, api, categories, db, expenses, web | — | — | not started | not run | 0/3 tested · 0/3 passing | — |
 | US-006 | EPIC-002 | Edit an existing expense | US-006 | 2 | PATCH /expenses/{id}, api, db, expenses | — | — | not started | not run | 0/2 tested · 0/2 passing | — |
 | US-007 | EPIC-002 | Delete an expense | US-007 | 2 | DELETE /expenses/{id}, api, db, expenses | — | — | not started | not run | 0/1 tested · 0/1 passing | — |
-| US-008 | EPIC-003 | Use default categories | US-008 | 1 | GET /categories, api, categories, db | — | — | not started | not run | 0/1 tested · 0/1 passing | — |
-| US-009 | EPIC-003 | Create a custom category | US-009 | 1 | POST /categories, api, categories, db, web | — | — | not started | not run | 0/2 tested · 0/2 passing | — |
+| US-008 | EPIC-003 | Use default categories | US-008 | 1 | GET /categories, api, categories, db | — | 7937121 | delivered | not run | 1/1 tested · 0/1 passing | — |
+| US-009 | EPIC-003 | Create a custom category | US-009 | 1 | POST /categories, api, categories, db, web | backend/app/models.py, backend/app/routers/auth.py, backend/app/routers/categories.py, backend/app/schemas.py, backend/tests/acceptance/test_categories_isolation.py +5 more | 7937121 | delivered | succeeded | 2/2 tested · 0/2 passing | — |
 | US-010 | EPIC-003 | Manage custom categories | US-010 | 2 | DELETE /categories/{id}, PATCH /categories/{id}, api, categories, db, expenses, web | — | — | not started | not run | 0/2 tested · 0/2 passing | — |
 | US-011 | EPIC-004 | Set a monthly budget for a category | US-011 | 2 | PUT /budgets/{category_id}, api, budgets, db, web | — | — | not started | not run | 0/3 tested · 0/3 passing | — |
 | US-012 | EPIC-004 | Update or remove a category budget | US-012 | 2 | DELETE /budgets/{category_id}, PUT /budgets/{category_id}, api, budgets, db | — | — | not started | not run | 0/2 tested · 0/2 passing | — |
