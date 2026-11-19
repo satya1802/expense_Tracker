@@ -19,3 +19,7 @@ bcrypt>=4.1.0
 passlib>=1.7.4
 sendgrid>=6.11.0
 # END QUORQ ARCHITECTURE PACKAGES
+
+# Validates the `email` field on signup/login (RFC-shape check), used by pydantic's
+# EmailStr.
+email-validator==2.2.0

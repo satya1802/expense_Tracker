@@ -68,6 +68,12 @@ class UserSession(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Additive column (US-001-1): tracks the session's idle timer, bumped on every
+    # accepted request. `expires_at` remains the session's absolute lifetime cap;
+    # this is what SESSION_IDLE_MINUTES checks against.
+    last_activity_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+    )
 
     user: Mapped["User"] = relationship(back_populates="sessions")
 

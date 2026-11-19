@@ -19,6 +19,7 @@ assumed) fixes that without downgrading bcrypt below the version the
 architecture requires.
 """
 
+import secrets
 from types import SimpleNamespace
 
 import bcrypt
@@ -52,3 +53,9 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, password_hash: str) -> bool:
     """Check a plaintext password against a hash produced by `hash_password`."""
     return _pwd_context.verify(password, password_hash)
+
+
+def generate_session_token() -> str:
+    """An opaque, unguessable session token. Fits the `sessions.token` column
+    (String(64)); `token_urlsafe(32)` produces 43 characters."""
+    return secrets.token_urlsafe(32)

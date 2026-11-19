@@ -5,20 +5,17 @@ import React from "react";
 import { Icons } from "@/lib/icons";
 import { brand } from "@/lib/brand";
 import { useNavigate } from "@/lib/navigate";
+import { ApiError, apiFetch, setSessionToken } from "@/lib/api";
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const { Check } = Icons;
 
 const PRODUCT = "Expense Tracker";
 const PAGE_TITLE = "Create your account";
-const INTRO = "Track your spending privately. Your expenses, categories and budgets are visible only to you.";
-const EMAIL_IN_USE_COPY =
-  "That email is already in use. Enter a valid email address and a password that meets the stated minimum requirements.";
+const INTRO =
+  "Track your spending privately. Your expenses, categories and budgets are visible only to you.";
+const EMAIL_IN_USE_COPY = "Email already in use";
 const PRIVACY_HINT =
   "Your password is saved hashed, never in plain text. We only email you about your own budget alerts.";
-
-// Emails already registered in this demo account store (users.email is unique)
-const REGISTERED_EMAILS = ["maya.okonkwo@fastmail.com", "rui.alvarez@hey.com"];
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const mix = (colour, percent) => `color-mix(in srgb, ${colour} ${percent}%, transparent)`;
@@ -27,7 +24,7 @@ export default function Screen() {
   const navigate = useNavigate();
   const [form, setForm] = React.useState({ email: "", password: "", confirm: "" });
   const [errors, setErrors] = React.useState({});
-  const [phase, setPhase] = React.useState("idle"); // idle | creating
+  const [phase, setPhase] = React.useState("idle"); // idle | creating | created
 
   const glass = {
     backgroundColor: "rgba(255,255,255,0.07)",
@@ -38,7 +35,7 @@ export default function Screen() {
 
   const pwLongEnough = form.password.length >= 10;
   const pwHasNumber = /\d/.test(form.password);
-  const emailTaken = errors.email === "taken";
+  const emailTaken = errors.email === EMAIL_IN_USE_COPY;
   const errorList = Object.keys(errors).length > 0;
 
   const set = (key) => (e) => {
@@ -52,16 +49,17 @@ export default function Screen() {
     });
   };
 
+  // Client side only checks presence and that the two passwords match: the
+  // password rule itself (minimum 8 characters) is the server's to enforce, and
+  // its 422 is what supplies the message (AC-003) — not a guess made here.
   const validate = () => {
     const next = {};
     const email = form.email.trim();
     if (!email) next.email = "Enter the email address you want to sign in with.";
-    else if (!EMAIL_PATTERN.test(email)) next.email = "That email address does not look right. Check for a missing @ or domain.";
-    else if (REGISTERED_EMAILS.includes(email.toLowerCase())) next.email = "taken";
+    else if (!EMAIL_PATTERN.test(email))
+      next.email = "That email address does not look right. Check for a missing @ or domain.";
 
-    if (!form.password) next.password = "Choose a password of at least 10 characters including one number.";
-    else if (!pwLongEnough || !pwHasNumber)
-      next.password = "Password needs at least 10 characters and at least one number.";
+    if (!form.password) next.password = "Choose a password.";
 
     if (!form.confirm) next.confirm = "Re-type your password so we know it is the one you meant.";
     else if (form.confirm !== form.password) next.confirm = "The two passwords do not match.";
@@ -69,19 +67,44 @@ export default function Screen() {
     return next;
   };
 
-  const onSubmit = (e) => {
+  const onSubmit = async (e) => {
     e.preventDefault();
     if (phase === "creating") return;
     const next = validate();
     setErrors(next);
-    if (Object.keys(next).length === 0) setPhase("creating");
-  };
+    if (Object.keys(next).length > 0) return;
 
-  React.useEffect(() => {
-    if (phase !== "creating") return undefined;
-    const t = setTimeout(() => navigate("dashboard"), 700);
-    return () => clearTimeout(t);
-  }, [phase]);
+    setPhase("creating");
+    try {
+      const result = await apiFetch("/auth/signup", {
+        method: "POST",
+        body: JSON.stringify({ email: form.email.trim(), password: form.password }),
+      });
+      setSessionToken(result.token);
+      setPhase("created");
+      navigate("dashboard");
+    } catch (err) {
+      setPhase("idle");
+      if (err instanceof ApiError && err.status === 409) {
+        setErrors({ email: EMAIL_IN_USE_COPY });
+      } else if (err instanceof ApiError && err.status === 422) {
+        const fieldErrors = {};
+        const detail = Array.isArray(err.body?.detail) ? err.body.detail : [];
+        for (const item of detail) {
+          if (item && typeof item.field === "string" && typeof item.message === "string") {
+            fieldErrors[item.field] = item.message;
+          }
+        }
+        setErrors(
+          Object.keys(fieldErrors).length > 0
+            ? fieldErrors
+            : { email: "We could not create that account. Check your details and try again." },
+        );
+      } else {
+        setErrors({ email: "We could not reach the server. Please try again." });
+      }
+    }
+  };
 
   const fieldStyle = (invalid) => ({
     ...glass,
@@ -99,7 +122,11 @@ export default function Screen() {
   return (
     <div
       className="relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-12 text-white"
-      style={{ fontFamily: brand.fontBody, backgroundColor: brand.backgroundColor, "--np-ring": brand.primaryColor }}
+      style={{
+        fontFamily: brand.fontBody,
+        backgroundColor: brand.backgroundColor,
+        "--np-ring": brand.primaryColor,
+      }}
     >
       <style>{`
         .np-focus:focus-visible { outline: 2px solid var(--np-ring); outline-offset: 2px; }
@@ -111,26 +138,60 @@ export default function Screen() {
         }
       `}</style>
 
-      <div aria-hidden className="pointer-events-none absolute -left-32 top-[-120px] h-[520px] w-[520px] rounded-full blur-[120px]" style={{ backgroundColor: mix(brand.primaryColor, 70) }} />
-      <div aria-hidden className="pointer-events-none absolute bottom-[-160px] right-[-80px] h-[560px] w-[560px] rounded-full blur-[130px]" style={{ backgroundColor: mix(brand.accentColor, 60) }} />
-      <p className="absolute left-6 top-7 text-lg font-bold sm:left-10 sm:top-8" style={{ fontFamily: brand.fontHeading }}>{PRODUCT}</p>
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -left-32 top-[-120px] h-[520px] w-[520px] rounded-full blur-[120px]"
+        style={{ backgroundColor: mix(brand.primaryColor, 70) }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute bottom-[-160px] right-[-80px] h-[560px] w-[560px] rounded-full blur-[130px]"
+        style={{ backgroundColor: mix(brand.accentColor, 60) }}
+      />
+      <p
+        className="absolute left-6 top-7 text-lg font-bold sm:left-10 sm:top-8"
+        style={{ fontFamily: brand.fontHeading }}
+      >
+        {PRODUCT}
+      </p>
 
-      <main className="relative w-full max-w-[460px] p-7 backdrop-blur-2xl sm:p-10" style={{ ...glass, boxShadow: "0 40px 120px -20px rgba(0,0,0,0.6)" }}>
-        <p className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold" style={{ backgroundColor: mix(brand.accentColor, 25), color: "#fff" }}>
+      <main
+        className="relative w-full max-w-[460px] p-7 backdrop-blur-2xl sm:p-10"
+        style={{ ...glass, boxShadow: "0 40px 120px -20px rgba(0,0,0,0.6)" }}
+      >
+        <p
+          className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold"
+          style={{ backgroundColor: mix(brand.accentColor, 25), color: "#fff" }}
+        >
           <span aria-hidden>●</span> Private by default
         </p>
 
-        <h1 data-wf="b-0-0" className="mt-5 text-[34px] font-extrabold leading-tight tracking-tight sm:text-4xl" style={{ fontFamily: brand.fontHeading }}>
+        <h1
+          data-wf="b-0-0"
+          className="mt-5 text-[34px] font-extrabold leading-tight tracking-tight sm:text-4xl"
+          style={{ fontFamily: brand.fontHeading }}
+        >
           {PAGE_TITLE}
         </h1>
-        <p data-wf="b-1-0" className="mt-3 text-sm leading-relaxed text-white/70">{INTRO}</p>
+        <p data-wf="b-1-0" className="mt-3 text-sm leading-relaxed text-white/70">
+          {INTRO}
+        </p>
 
-        <form data-wf="b-2-0" className="mt-8" onSubmit={onSubmit} noValidate aria-describedby="np-form-note">
+        <form
+          data-wf="b-2-0"
+          className="mt-8"
+          onSubmit={onSubmit}
+          noValidate
+          aria-describedby="np-form-note"
+        >
           <h2 className="sr-only">Sign up</h2>
 
           <div className="space-y-5">
             <div>
-              <label htmlFor="np-email" className="block text-xs font-semibold uppercase tracking-wider text-white/75">
+              <label
+                htmlFor="np-email"
+                className="block text-xs font-semibold uppercase tracking-wider text-white/75"
+              >
                 Email address
               </label>
               <input
@@ -149,16 +210,26 @@ export default function Screen() {
                 style={fieldStyle(Boolean(errors.email))}
               />
               {errors.email ? (
-                <p id="np-email-error" className="np-enter mt-2 flex items-start gap-1.5 text-xs font-semibold" style={{ color: brand.accentColor }}>
+                <p
+                  id="np-email-error"
+                  className="np-enter mt-2 flex items-start gap-1.5 text-xs font-semibold"
+                  style={{ color: brand.accentColor }}
+                >
                   <Icons.AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
-                  <span>{emailTaken ? "That email is already in use." : errors.email}</span>
+                  <span>{errors.email}</span>
                 </p>
               ) : null}
             </div>
 
             <div>
-              <label htmlFor="np-password" className="block text-xs font-semibold uppercase tracking-wider text-white/75">
-                Password <span className="normal-case tracking-normal text-white/55">(minimum 10 characters, at least one number)</span>
+              <label
+                htmlFor="np-password"
+                className="block text-xs font-semibold uppercase tracking-wider text-white/75"
+              >
+                Password{" "}
+                <span className="normal-case tracking-normal text-white/55">
+                  (minimum 8 characters)
+                </span>
               </label>
               <input
                 data-wf="i-2-0-1"
@@ -169,24 +240,49 @@ export default function Screen() {
                 value={form.password}
                 onChange={set("password")}
                 aria-invalid={errors.password ? "true" : undefined}
-                aria-describedby={errors.password ? "np-password-rules np-password-error" : "np-password-rules"}
+                aria-describedby={
+                  errors.password ? "np-password-rules np-password-error" : "np-password-rules"
+                }
                 className="np-focus mt-2 h-12 w-full px-4 text-sm text-white placeholder:text-white/35 outline-none"
                 style={fieldStyle(Boolean(errors.password))}
               />
-              <ul id="np-password-rules" className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/60">
-                <li className="flex items-center gap-1.5" style={pwLongEnough ? { color: brand.primaryColor } : undefined}>
-                  {pwLongEnough ? <Icons.Check className="h-3.5 w-3.5" aria-hidden /> : <Icons.X className="h-3.5 w-3.5" aria-hidden />}
+              <ul
+                id="np-password-rules"
+                className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/60"
+              >
+                <li
+                  className="flex items-center gap-1.5"
+                  style={pwLongEnough ? { color: brand.primaryColor } : undefined}
+                >
+                  {pwLongEnough ? (
+                    <Icons.Check className="h-3.5 w-3.5" aria-hidden />
+                  ) : (
+                    <Icons.X className="h-3.5 w-3.5" aria-hidden />
+                  )}
                   <span style={{ fontVariantNumeric: "tabular-nums" }}>
-                    {pwLongEnough ? "10+ characters" : `10 characters (${form.password.length} so far)`}
+                    {pwLongEnough
+                      ? "10+ characters"
+                      : `10 characters (${form.password.length} so far)`}
                   </span>
                 </li>
-                <li className="flex items-center gap-1.5" style={pwHasNumber ? { color: brand.primaryColor } : undefined}>
-                  {pwHasNumber ? <Icons.Check className="h-3.5 w-3.5" aria-hidden /> : <Icons.X className="h-3.5 w-3.5" aria-hidden />}
+                <li
+                  className="flex items-center gap-1.5"
+                  style={pwHasNumber ? { color: brand.primaryColor } : undefined}
+                >
+                  {pwHasNumber ? (
+                    <Icons.Check className="h-3.5 w-3.5" aria-hidden />
+                  ) : (
+                    <Icons.X className="h-3.5 w-3.5" aria-hidden />
+                  )}
                   <span>At least one number</span>
                 </li>
               </ul>
               {errors.password ? (
-                <p id="np-password-error" className="np-enter mt-2 flex items-start gap-1.5 text-xs font-semibold" style={{ color: brand.accentColor }}>
+                <p
+                  id="np-password-error"
+                  className="np-enter mt-2 flex items-start gap-1.5 text-xs font-semibold"
+                  style={{ color: brand.accentColor }}
+                >
                   <Icons.AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
                   <span>{errors.password}</span>
                 </p>
@@ -194,7 +290,10 @@ export default function Screen() {
             </div>
 
             <div>
-              <label htmlFor="np-confirm" className="block text-xs font-semibold uppercase tracking-wider text-white/75">
+              <label
+                htmlFor="np-confirm"
+                className="block text-xs font-semibold uppercase tracking-wider text-white/75"
+              >
                 Confirm password
               </label>
               <input
@@ -211,7 +310,11 @@ export default function Screen() {
                 style={fieldStyle(Boolean(errors.confirm))}
               />
               {errors.confirm ? (
-                <p id="np-confirm-error" className="np-enter mt-2 flex items-start gap-1.5 text-xs font-semibold" style={{ color: brand.accentColor }}>
+                <p
+                  id="np-confirm-error"
+                  className="np-enter mt-2 flex items-start gap-1.5 text-xs font-semibold"
+                  style={{ color: brand.accentColor }}
+                >
                   <Icons.AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
                   <span>{errors.confirm}</span>
                 </p>
@@ -226,13 +329,20 @@ export default function Screen() {
             className={`mt-6 p-4 text-sm leading-relaxed ${errorList ? "np-enter" : ""}`}
             style={
               errorList
-                ? { ...glass, border: `1px solid ${mix(brand.accentColor, 60)}`, boxShadow: `0 20px 60px -20px ${mix(brand.accentColor, 70)}` }
+                ? {
+                    ...glass,
+                    border: `1px solid ${mix(brand.accentColor, 60)}`,
+                    boxShadow: `0 20px 60px -20px ${mix(brand.accentColor, 70)}`,
+                  }
                 : { ...glass, backgroundColor: "rgba(255,255,255,0.04)" }
             }
           >
             {errorList ? (
               <>
-                <p className="flex items-center gap-2 font-bold" style={{ color: brand.accentColor }}>
+                <p
+                  className="flex items-center gap-2 font-bold"
+                  style={{ color: brand.accentColor }}
+                >
                   <Icons.AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
                   We could not create the account yet
                 </p>
@@ -242,10 +352,15 @@ export default function Screen() {
                   ))}
                 </ul>
               </>
-            ) : phase === "creating" ? (
-              <p className="flex items-center gap-2 font-semibold" style={{ color: brand.primaryColor }}>
+            ) : phase === "creating" || phase === "created" ? (
+              <p
+                className="flex items-center gap-2 font-semibold"
+                style={{ color: brand.primaryColor }}
+              >
                 <Icons.CheckCircle className="h-4 w-4 shrink-0" aria-hidden />
-                Account created. Taking you to your dashboard…
+                {phase === "created"
+                  ? "Account created. Taking you to your dashboard…"
+                  : "Creating your account…"}
               </p>
             ) : (
               <p className="text-white/70">{PRIVACY_HINT}</p>
@@ -273,7 +388,10 @@ export default function Screen() {
               className="np-focus h-12 w-full text-sm font-semibold text-white/85 transition-colors hover:bg-white/10 hover:text-white"
               style={glass}
             >
-              Already have an account? <span className="font-bold" style={{ color: brand.accentColor }}>Sign in</span>
+              Already have an account?{" "}
+              <span className="font-bold" style={{ color: brand.accentColor }}>
+                Sign in
+              </span>
             </button>
           </div>
         </form>

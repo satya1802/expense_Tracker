@@ -3,8 +3,10 @@
 See `app/routers/auth.py` for why every handler here returns a placeholder.
 """
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
+from app.dependencies import get_current_user
+from app.models import User
 from app.schemas import StubResponse
 
 router = APIRouter(tags=["expenses"])
@@ -15,12 +17,13 @@ async def list_expenses(
     category_id: str | None = None,
     from_: str | None = Query(default=None, alias="from"),
     to: str | None = None,
+    user: User = Depends(get_current_user),
 ) -> StubResponse:
     return StubResponse(endpoint="GET /expenses")
 
 
 @router.post("/expenses", response_model=StubResponse, status_code=201)
-async def create_expense() -> StubResponse:
+async def create_expense(user: User = Depends(get_current_user)) -> StubResponse:
     return StubResponse(endpoint="POST /expenses")
 
 
@@ -28,6 +31,7 @@ async def create_expense() -> StubResponse:
 async def export_expenses(
     from_: str | None = Query(default=None, alias="from"),
     to: str | None = None,
+    user: User = Depends(get_current_user),
 ) -> StubResponse:
     # Implementing this ticket replaces StubResponse with a `text/csv` response
     # (e.g. StreamingResponse / PlainTextResponse), not a JSON body.
@@ -35,10 +39,10 @@ async def export_expenses(
 
 
 @router.patch("/expenses/{id}", response_model=StubResponse)
-async def update_expense(id: str) -> StubResponse:
+async def update_expense(id: str, user: User = Depends(get_current_user)) -> StubResponse:
     return StubResponse(endpoint="PATCH /expenses/{id}")
 
 
 @router.delete("/expenses/{id}", response_model=StubResponse)
-async def delete_expense(id: str) -> StubResponse:
+async def delete_expense(id: str, user: User = Depends(get_current_user)) -> StubResponse:
     return StubResponse(endpoint="DELETE /expenses/{id}")

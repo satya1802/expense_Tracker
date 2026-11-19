@@ -11,8 +11,7 @@
 // The generated screens do NOT use this yet -- they render seeded sample data, exactly as
 // they were approved. This is the seam to replace that with real calls, one screen at a
 // time.
-export const API_BASE_URL: string =
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 // The shared bearer the deployed API expects (its SECRET_KEY). The platform bakes the
 // same value into both sides at deploy time, so authenticated calls work out of the box.
@@ -50,6 +49,32 @@ export function clearSessionToken(): void {
   }
 }
 
+// Thrown by apiFetch for any non-2xx response. `status` and the parsed JSON `body`
+// (when the response had one) let a screen tell a 409 from a 422 from a 401 apart
+// and show the right per-field or generic message, instead of guessing from a
+// stringified message.
+export class ApiError extends Error {
+  status: number;
+  body: unknown;
+  constructor(status: number, body: unknown) {
+    super(`request failed: ${status}`);
+    this.name = "ApiError";
+    this.status = status;
+    this.body = body;
+  }
+}
+
+// Set by the app shell once, on mount: called whenever a non-auth endpoint answers
+// 401 (missing, malformed, revoked or idle-expired token). apiFetch itself has no
+// router access, so it clears the token and leaves the redirect + notice to the
+// handler the app registers.
+type UnauthorizedHandler = () => void;
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): void {
+  unauthorizedHandler = handler;
+}
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const bearer = getSessionToken() ?? API_SECRET_KEY;
   // Join with exactly one slash: API_BASE_URL is baked with a trailing slash (the API
@@ -64,7 +89,20 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     },
   });
   if (!response.ok) {
-    throw new Error(`${init?.method ?? "GET"} ${path} failed: ${response.status}`);
+    let body: unknown = null;
+    try {
+      body = await response.json();
+    } catch {
+      // No JSON body (or an empty one) to report.
+    }
+    // /auth/login and /auth/signup answer 401/409/422 as ordinary business
+    // outcomes the screen itself must show; only a 401 from every other
+    // (bearer-protected) endpoint means the session itself is no longer valid.
+    if (response.status === 401 && !path.startsWith("/auth/")) {
+      clearSessionToken();
+      unauthorizedHandler?.();
+    }
+    throw new ApiError(response.status, body);
   }
   return response.status === 204 ? (undefined as T) : ((await response.json()) as T);
 }
