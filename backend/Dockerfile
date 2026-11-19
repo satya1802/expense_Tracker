@@ -4,7 +4,9 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# --only-binary :all: refuses any package that would fall back to building from
+# an sdist (and running its setup.py/setup.cfg) during the image build.
+RUN pip install --no-cache-dir --only-binary :all: -r requirements.txt
 
 COPY app ./app
 

@@ -9,16 +9,16 @@ cheap one in tests.
 `bcrypt` has only ever used a password's first 72 bytes; versions before
 5.0 truncated the rest silently, 5.0+ raises `ValueError` instead. The
 `passlib==1.7.4` this project depends on (the latest release published on
-PyPI) predates that change: its one-time backend self-test hashes a
-deliberately oversized probe string to check for a historical wraparound
-bug, and with bcrypt>=5.0 that self-test itself now raises before a single
-real password is ever hashed -- independently of how long an actual
-password is. Restoring bcrypt's old silent-truncation behaviour here (which
-is also what passlib's self-test, and bcrypt itself before 5.0, always
-assumed) fixes that without downgrading bcrypt below the version the
-architecture requires.
+PyPI) predates that change: the first time its bcrypt handler is used, it
+runs a one-time backend self-test that hashes a deliberately oversized probe
+string to check for a historical wraparound bug, and with bcrypt>=5.0 that
+self-test itself now raises before a single real password is ever hashed --
+independently of how long an actual password is, and before this module's
+own `hash_password`/`verify_password` (which pass through passlib's own
+truncation first) ever touch `bcrypt.hashpw`.
 """
 
+import contextlib
 import secrets
 from types import SimpleNamespace
 
@@ -33,16 +33,35 @@ from passlib.context import CryptContext
 if not hasattr(bcrypt, "__about__"):
     bcrypt.__about__ = SimpleNamespace(__version__=bcrypt.__version__)
 
-_bcrypt_hashpw = bcrypt.hashpw
 
+@contextlib.contextmanager
+def _restore_pre_5_0_truncation():
+    """Restore bcrypt's pre-5.0 silent-truncation behaviour, but only for the
+    duration of this context -- not for the rest of the process. Used solely
+    to get passlib's one-time backend self-test (see module docstring) past
+    its oversized probe string; every other caller of `bcrypt.hashpw`,
+    including this module's own real password hashing (once the self-test
+    has already run) and any other package that imports `bcrypt`, is
+    unaffected once the block exits.
+    """
+    original_hashpw = bcrypt.hashpw
 
-def _bcrypt_hashpw_truncated(password: bytes, salt: bytes) -> bytes:
-    return _bcrypt_hashpw(password[:72], salt)
+    def _truncated(password: bytes, salt: bytes) -> bytes:
+        return original_hashpw(password[:72], salt)
 
+    bcrypt.hashpw = _truncated
+    try:
+        yield
+    finally:
+        bcrypt.hashpw = original_hashpw
 
-bcrypt.hashpw = _bcrypt_hashpw_truncated
 
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+with _restore_pre_5_0_truncation():
+    # Forces the bcrypt backend to load now -- running its self-test while the
+    # truncation patch above is active -- rather than lazily on this process's
+    # first real call to hash_password/verify_password.
+    _pwd_context.hash("backend-self-test-probe")
 
 
 def hash_password(password: str) -> str:

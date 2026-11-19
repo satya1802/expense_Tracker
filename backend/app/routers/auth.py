@@ -4,9 +4,10 @@
 one only builds the account and session module (US-001-1).
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -41,7 +42,7 @@ _SESSION_ABSOLUTE_LIFETIME = timedelta(days=30)
 
 def _create_session(db: Session, user_id: str) -> str:
     token = generate_session_token()
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     db.add(
         UserSession(
             token=token,
@@ -57,7 +58,7 @@ def _create_session(db: Session, user_id: str) -> str:
 
 @router.post("/auth/signup", response_model=AuthResponse, status_code=201)
 async def signup(payload: SignupRequest, db: Session = Depends(get_db)) -> AuthResponse:
-    existing = db.query(User).filter(User.email == payload.email).first()
+    existing = db.query(User).filter(func.lower(User.email) == payload.email.lower()).first()
     if existing is not None:
         raise HTTPException(status_code=409, detail="Email already in use")
 
@@ -81,7 +82,7 @@ async def signup(payload: SignupRequest, db: Session = Depends(get_db)) -> AuthR
 
 @router.post("/auth/login", response_model=AuthResponse)
 async def login(payload: LoginRequest, db: Session = Depends(get_db)) -> AuthResponse:
-    user = db.query(User).filter(User.email == payload.email).first()
+    user = db.query(User).filter(func.lower(User.email) == payload.email.lower()).first()
     if user is None or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
@@ -95,10 +96,15 @@ async def logout(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Response:
+    # get_current_user (app/dependencies.py) has already parsed and verified this
+    # exact bearer token as belonging to `user`; re-deriving it here from the
+    # header is the one place this duplicates that dependency's parsing. It
+    # revokes only the session for this token, never another of the user's
+    # active sessions.
     _, _, token = request.headers.get("Authorization", "").partition(" ")
     session = db.query(UserSession).filter(UserSession.token == token).first()
     if session is not None:
-        session.revoked_at = datetime.utcnow()
+        session.revoked_at = datetime.now(UTC)
         db.commit()
     return Response(status_code=204)
 

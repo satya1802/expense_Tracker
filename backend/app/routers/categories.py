@@ -7,14 +7,17 @@ account's categories are never visible or editable from another's token.
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import Category, User
+from app.models import Category, Expense, User
 from app.schemas import CategoryCreate, CategoryOut, CategoryUpdate
 
 router = APIRouter(tags=["categories"])
+
+_DUPLICATE_NAME_DETAIL = "You already have a category with that name"
 
 
 def _require_name(name: str) -> str:
@@ -35,7 +38,7 @@ def _reject_duplicate(db: Session, user_id: str, name: str, exclude_id: str | No
     if exclude_id is not None:
         query = query.filter(Category.id != exclude_id)
     if query.first() is not None:
-        raise HTTPException(status_code=409, detail="You already have a category with that name")
+        raise HTTPException(status_code=409, detail=_DUPLICATE_NAME_DETAIL)
 
 
 @router.get("/categories", response_model=list[CategoryOut])
@@ -55,7 +58,15 @@ async def create_category(
     _reject_duplicate(db, user.id, name)
     category = Category(user_id=user.id, name=name, is_default=False)
     db.add(category)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        # Two concurrent requests can both pass _reject_duplicate's check and
+        # then race to commit; the unique index (ix_categories_user_id_lower_name)
+        # catches the loser. Translate that into the same 409 a sequential
+        # duplicate gets, instead of an unhandled 500.
+        db.rollback()
+        raise HTTPException(status_code=409, detail=_DUPLICATE_NAME_DETAIL) from exc
     db.refresh(category)
     return category
 
@@ -73,7 +84,11 @@ async def update_category(
     name = _require_name(payload.name)
     _reject_duplicate(db, user.id, name, exclude_id=category.id)
     category.name = name
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=_DUPLICATE_NAME_DETAIL) from exc
     db.refresh(category)
     return category
 
@@ -88,6 +103,19 @@ async def delete_category(
     category = db.query(Category).filter(Category.id == id, Category.user_id == user.id).first()
     if category is None:
         raise HTTPException(status_code=404, detail="Category not found")
+    if category.is_default:
+        raise HTTPException(status_code=409, detail="Default categories cannot be deleted")
+    has_expenses = (
+        db.query(Expense.id).filter(Expense.category_id == category.id).first() is not None
+    )
+    if has_expenses and not confirm:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This category has existing expenses; pass confirm=true to delete "
+                "the category and those expenses"
+            ),
+        )
     db.delete(category)
     db.commit()
     return None

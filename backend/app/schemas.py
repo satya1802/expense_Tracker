@@ -4,6 +4,7 @@ One pair per entity in the approved data model, plus the placeholder every
 generated route returns until it has been implemented.
 """
 
+import os
 from datetime import datetime
 
 from email_validator import EmailNotValidError, validate_email
@@ -11,10 +12,15 @@ from pydantic import BaseModel, Field, field_validator
 
 
 def _validate_email(value: str) -> str:
-    """Validate email syntax, allowing RFC 2606 special-use test domains
-    (e.g. example.test) used by the acceptance/QA suites."""
+    """Validate email syntax. RFC 2606 special-use test domains (e.g.
+    example.test) are only accepted while running under pytest -- the
+    acceptance/QA suites use them -- never in a deployed process, so a real
+    signup can never register one of those addresses."""
+    allow_test_domains = "PYTEST_CURRENT_TEST" in os.environ
     try:
-        result = validate_email(value, check_deliverability=False, test_environment=True)
+        result = validate_email(
+            value, check_deliverability=False, test_environment=allow_test_domains
+        )
     except EmailNotValidError as exc:
         raise ValueError(f"value is not a valid email address: {exc}") from exc
     return result.normalized
@@ -73,11 +79,13 @@ class CategoryCreate(BaseModel):
     # Blank/whitespace-only names and duplicates are rejected in the router (not
     # here) so the response shape matches the CATEGORIES CONTRACT exactly: a plain
     # 422 {detail: [{field, message}]} or 409 {detail: str}, not pydantic's own shape.
-    name: str
+    # max_length matches the categories.name VARCHAR(60) column so an overlong name
+    # is rejected here with a clean 422, not at the database layer.
+    name: str = Field(max_length=60)
 
 
 class CategoryUpdate(BaseModel):
-    name: str
+    name: str = Field(max_length=60)
 
 
 class CategoryOut(BaseModel):
