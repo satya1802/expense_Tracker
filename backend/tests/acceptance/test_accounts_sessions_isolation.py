@@ -182,7 +182,7 @@ def test_ac008_user_a_token_never_returns_user_b_categories(client: TestClient) 
     headers_a = {"Authorization": f"Bearer {body_a['token']}"}
     headers_b = {"Authorization": f"Bearer {body_b['token']}"}
 
-    created = client.post("/categories", json={"name": "Groceries"}, headers=headers_b)
+    created = client.post("/categories", json={"name": "Side gigs"}, headers=headers_b)
     assert created.status_code == 201
     category_id = created.json().get("id")
     assert category_id, "a real category endpoint must return the created row's id"
