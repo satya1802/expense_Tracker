@@ -7,124 +7,134 @@
 
 ### REQ-TECH-STACK · approved · source: requirements:technology-stack
 
-Product owner approved a fixed technology stack: FastAPI backend, AWS cloud, PostgreSQL 16 database, React 19 frontend. Design must use exactly these, no substitutions.
+Product owner approved an exact technology stack for this lightweight app; agents must design against these choices, not substitute alternatives.
 
-- Backend: FastAPI 0.115 -- handles accounts, expenses, budgets, budget checks, and email alert triggering; validates amounts/dates/categories; platform default.
-- Cloud: AWS -- hosts site, database, and outbound email; small-usage tiers suit a free, low-traffic app; platform default.
-- Database: PostgreSQL 16 -- stores structured, related records (users, expenses, categories, budgets); reliable per-category/per-month spend totals; keeps accounts' data separated; platform default.
-- Frontend: React 19 -- builds the interactive, mobile-friendly form-and-list screens (expense entry, filtering, budgets, live summary); platform default.
+- Backend: FastAPI 0.115 - handles accounts, saving expenses/budgets, near-/over-budget checks and triggering email alerts; clean, fast, and validates amounts/dates/categories on input; platform default.
+- Cloud: AWS - hosts the site, database and outbound alert emails with room to grow; platform default; small-usage tiers suit a no-revenue app.
+- Database: PostgreSQL 16 - stores structured related records (users, expenses, categories, budgets); reliably sums spending per category per month and isolates each account's data; platform default.
+- Frontend: React 19 - builds the interactive expense entry/filter/budget/summary screens and the required mobile-friendly layout; platform default, safest base for this app size.
 
 ### REQ-SERVICES · approved · source: requirements:services
 
-SendGrid is the approved transactional email service for budget alerts and sign-up/verification messages. Requires SENDGRID_API_KEY.
+SendGrid is the approved transactional email service, used to deliver budget alert emails and sign-up/verification messages reliably.
 
-- Service: SendGrid (SaaS), env var SENDGRID_API_KEY.
-- Purpose: deliver near-budget and over-budget alert emails reliably, plus sign-up/verification messages.
-- Needs an API key to send.
-- API keys required by this app: SENDGRID_API_KEY.
+- Email: SendGrid (type: saas, env var: SENDGRID_API_KEY) - sends one-to-one near-/over-budget alerts and sign-up/verification messages; requires an API key to send.
+- Required API key for this app: SENDGRID_API_KEY.
 
 ### REQ-SCOPE · approved · source: requirements:scope
 
-Delivery scope is lightweight; requirements version 1. Scope covers accounts, manual expense entry, categories, budgets, dashboard, alerts, currency, and export, explicitly as a responsive web app rather than native mobile.
+Delivery scope is lightweight: a responsive web app for manual expense tracking, categories, per-category monthly budgets and alerts, explicitly excluding bank sync, OCR and a native mobile app.
 
-In scope: email/password sign-up and login; private per-account data; manual expense entry (amount, category, date); default spending categories; custom category creation; monthly budget per category; budget-vs-spending status on dashboard; expense list view; simple spending summary; single user-selectable currency per account with no conversion.
-Out of scope -- do not design or build: automatic bank/card sync (transaction import); receipt photo scanning / OCR; native iOS/Android app (delivered instead as a mobile-friendly responsive web app).
+In scope: email/password sign-up and login; private per-account expense data; manual expense entry (amount, category, date); default spending categories; custom category creation; monthly budget per category; budget-vs-spending status on the dashboard; expense list view; simple spending summary view; single user-selectable account currency with no conversion.
+Out of scope - not designed or built: automatic bank account/card sync (transaction import); receipt photo scanning/OCR capture of expenses; native iOS/Android mobile app (delivered instead as a mobile-friendly responsive web app).
 
-### REQ-SIGNIN-ACCOUNTS · approved · source: requirements:sign-in-accounts
+### REQ-FEAT-AUTH · approved · source: requirements:feature:Sign-in & accounts
 
-Covers account creation, sign-in, sign-out, and keeping each account's data private.
+Covers account creation, sign-in, sign-out and keeping each account's data private.
 
-- Create an account: unique, valid email plus a password meeting minimum requirements; duplicate email or invalid input rejected with a clear message; on success the account is created and the user signed in or sent to sign in.
-- Sign in: registered users sign in with email and password and land on a dashboard showing only their own data; incorrect credentials are refused.
+- Create an account: unique, valid email plus a password meeting minimum requirements; duplicate email or invalid input rejected with a clear message; on success account is created and user is signed in or sent to sign in.
+- Sign in to my account: email+password sign-in takes the user to their own dashboard showing only their data; incorrect credentials are refused.
 - Sign out: ends the session immediately; user must sign in again to reach any data.
-- Keep account data private: each user sees only their own expenses, categories, budgets; unauthenticated attempts to open an expense, budget, or summary page prompt sign-in instead.
+- Keep account data private: each user sees only their own expenses, categories and budgets; unauthenticated attempts to open expense/budget/summary pages prompt sign-in instead.
 
-### REQ-EXPENSE-LOGGING · approved · source: requirements:logging-expenses
+### REQ-FEAT-EXPENSES · approved · source: requirements:feature:Logging expenses
 
-Covers manually logging, editing, and deleting expenses.
+Covers manually logging, editing and deleting expenses.
 
-- Log a new expense: positive amount, category, and date required; saved to the account and shown in the expense list in the account currency; invalid or missing fields block saving with a validation message.
-- Edit an expense: amount, category, or date can be changed to valid values; updates reflected in the expense list and any affected budget status; invalid values rejected.
-- Delete an expense: requires confirmation; once removed it no longer counts toward any budget or summary.
+- Log a new expense: positive amount, category, date; saved to account and shown in expense list in account currency; invalid/missing fields block saving with a validation message.
+- Edit an expense: change amount, category or date to valid values; updates reflected in expense list and affected budget status; invalid values rejected.
+- Delete an expense: delete after confirming; once removed it no longer counts toward any budget or summary.
 
-### REQ-CATEGORIES · approved · source: requirements:spending-categories
+### REQ-FEAT-CATEGORIES · approved · source: requirements:feature:Spending categories
 
-Covers default categories and user-managed custom categories.
+Covers default categories plus user-created custom categories, including rename/remove.
 
-- Use default categories: every new account starts with ready-made default categories available when adding expenses or setting budgets, no setup needed.
-- Create a custom category: name must not duplicate an existing one of the user's categories; becomes available for expenses and budgets; blank or duplicate name is rejected.
-- Rename or remove custom categories: rename to a valid, non-duplicate name applied everywhere it appears; deleting a custom category used by existing expenses warns about the effect and proceeds only after confirmation.
+- Use default categories: every new account starts with ready-made default categories available for expenses and budgets with no setup.
+- Create a custom category: name must not duplicate an existing one of the user's categories; becomes available for expenses/budgets; blank or duplicate name rejected.
+- Rename or remove custom categories: rename to a valid non-duplicate name applied everywhere it appears; deleting a custom category used by existing expenses warns about the effect and proceeds only after confirmation.
 
-### REQ-BUDGETS · approved · source: requirements:monthly-budgets
+### REQ-FEAT-BUDGETS · approved · source: requirements:feature:Monthly budgets
 
-Covers setting and changing/clearing a monthly budget per category.
+Covers setting, changing and clearing a monthly budget per category.
 
-- Set a monthly budget: positive amount per category; stored and used to measure that month's spending; continues to apply as each new calendar month resets counted spending; blank, non-numeric, or non-positive amounts rejected.
-- Change or clear a budget: changing updates current month's status and alert thresholds; removing it means the category no longer shows status or triggers alerts.
+- Set a monthly budget: positive monthly amount per category; used to measure that month's spending; continues to apply as each new month resets counted spending; blank/non-numeric/non-positive amounts rejected.
+- Change or clear a budget: changing updates current month's status and alert thresholds; removing the budget stops status display and alert generation for that category.
 
-### REQ-EXPENSE-LIST · approved · source: requirements:expense-list
+### REQ-FEAT-EXPENSE-LIST · approved · source: requirements:feature:Expense list
 
-Covers browsing and filtering the recorded expense list.
+Covers browsing the expense list and searching/filtering it.
 
-- Browse my expenses: list shows amount, category, date, ordered so recent entries are easy to find; empty state invites adding the first expense when there are none.
-- Search and filter expenses: filter by category and/or date range; a clear message appears when no expenses match.
+- Browse my expenses: list shows amount, category, date, ordered recent-first; empty state invites adding the first expense when there are none.
+- Search and filter expenses: filter by category and/or date range; clear message shown when no expenses match.
 
-### REQ-DASHBOARD-SUMMARY · approved · source: requirements:dashboard-summary
+### REQ-FEAT-DASHBOARD · approved · source: requirements:feature:Dashboard & summary
 
-Covers budget-vs-spending status and the simple spending summary view.
+Covers the budget-vs-spending dashboard view and the simple monthly spending summary.
 
-- Budget-versus-spending status: dashboard shows, per budgeted category, the budget amount, amount spent this month, and under/near/over status; categories with no budget still show spending but without comparison.
-- Simple spending summary: total spending and breakdown by category for the selected month in the account currency; spending totals only, no income tracking or advanced reporting.
+- Budget-versus-spending status: per budgeted category shows budget amount, amount spent this month, and under/near/over status; unbudgeted categories show spending without comparison.
+- Simple spending summary: total spending and per-category breakdown for the selected month in account currency; spending totals only, no income tracking or advanced reporting.
 
-### REQ-BUDGET-ALERTS · approved · source: requirements:budget-alerts
+### REQ-FEAT-ALERTS · approved · source: requirements:feature:Budget alerts
 
-Covers in-app and email alerts when spending nears or exceeds a category budget.
+Covers in-app and email alerts when a category crosses its near- or over-budget threshold.
 
-- In-app budget alerts: when spending reaches the near-budget threshold or exceeds the budget for the current month, an in-app alert names the category and whether approaching or over budget.
-- Email budget alerts: when a category crosses its near- or over-budget threshold, an email describing the category and near/over status is sent to the account email address via the transactional email service (SendGrid).
+- In-app budget alerts: shown when spending reaches the near-budget threshold or exceeds the budget for the current month, naming the category and whether approaching or over budget.
+- Email budget alerts: an email describing the category and near/over status is sent to the account email address via the transactional email service when a threshold is crossed.
 
-### REQ-ACCOUNT-SETTINGS · approved · source: requirements:account-settings
+### REQ-FEAT-SETTINGS · approved · source: requirements:feature:Account settings
 
-Covers choosing the account currency and exporting expenses as CSV.
+Covers choosing the account's single currency and exporting expense data as CSV.
 
-- Choose account currency: a single currency is selected for the account; expenses, budgets, and summaries display in that currency; entered amounts are treated as that currency with no conversion.
-- Export expenses as CSV: exports amount, category, and date for the signed-in account's own data only.
+- Choose account currency: a single currency per account; amounts for expenses, budgets and summaries displayed in it; entered amounts treated as that currency with no conversion.
+- Export expenses as CSV: file contains amount, category and date; contains only that account's own data.
 
-### NFR-001 · approved · source: requirements:NFR-001
+### REQ-NFR-001 · approved · source: requirements:NFR-001
 
-Security: passwords must be stored only as a hash, never in plain text.
+[security] Passwords must be stored only in hashed form, never in plain text, so a user's sign-in secret cannot be read back from stored data.
 
-Each account password is stored only in hashed form; the sign-in secret cannot be read back from stored data.
+Each account password is stored only as a hash; plain text passwords are never retained.
 
-### NFR-002 · approved · source: requirements:NFR-002
+**Related:** REQ-FEAT-AUTH
 
-Security: failed sign-in attempts show one generic message.
+### REQ-NFR-002 · approved · source: requirements:NFR-002
 
-When sign-in uses a wrong email or password, the user sees a single generic 'invalid credentials' message, without revealing which field was wrong.
+[security] Failed sign-in attempts show one generic invalid-credentials message, without revealing which field (email or password) was wrong.
 
-### NFR-003 · approved · source: requirements:NFR-003
+A wrong email or wrong password both produce the same single generic error message on sign-in.
 
-Security: sessions end on sign-out and after idle timeout.
+**Related:** REQ-FEAT-AUTH
 
-Signing out ends the session; a session left idle beyond the configured lifetime expires. The user must sign in again before doing anything else, protecting financial data on a shared device.
+### REQ-NFR-003 · approved · source: requirements:NFR-003
 
-### NFR-004 · approved · source: requirements:NFR-004
+[security] Sessions end on sign-out and expire after the configured idle lifetime, requiring sign-in again before further access.
 
-Privacy: account data is visible and exportable only to its owner.
+Signing out immediately ends the session; a session left idle beyond the configured lifetime also expires. Purpose: keep someone sharing the device out of the account's financial data.
 
-A signed-in user can view and export only their own expenses, categories, and budgets, never another account's data. Anyone not signed in is blocked from account pages and prompted to sign in first.
+**Related:** REQ-FEAT-AUTH
 
-### NFR-005 · approved · source: requirements:NFR-005
+### REQ-NFR-004 · approved · source: requirements:NFR-004
 
-Usability: responsive layout from small phone to large desktop screens.
+[privacy] A signed-in user can view and export only their own data; unauthenticated users are blocked from account pages and prompted to sign in.
 
-The dashboard, expense list, and forms stay readable and usable from small phone screens up to large desktop screens, with no horizontal scrolling or broken layout.
+No user can ever see or export another account's expenses, categories or budgets. Anyone not signed in is blocked from account pages and prompted to sign in first.
 
-### NFR-006 · approved · source: requirements:NFR-006
+**Related:** REQ-FEAT-AUTH
 
-Availability: budget alerts survive missing email configuration.
+### REQ-NFR-005 · approved · source: requirements:NFR-005
 
-If the email service API key is not configured, in-app budget alerts still appear and the missing email configuration is surfaced to operators rather than the alert failing silently.
+[usability] Dashboard, expense list and forms must stay readable and usable from small phone screens to large desktop screens, with no horizontal scrolling or broken layout.
+
+Responsive layout requirement applies across the dashboard, expense list and all forms.
+
+**Related:** REQ-FEAT-DASHBOARD, REQ-FEAT-EXPENSE-LIST
+
+### REQ-NFR-006 · approved · source: requirements:NFR-006
+
+[availability] If the email API key is not configured, in-app budget alerts must still appear, and the missing email configuration must be surfaced to operators rather than failing silently.
+
+Email outage/misconfiguration must not suppress in-app alerting; operators must be informed of the missing configuration.
+
+**Related:** REQ-FEAT-ALERTS, REQ-SERVICES
 <!-- sdlc:auto:end narrative -->
 
 <!-- sdlc:auto:start summary -->

@@ -7,115 +7,206 @@
 
 ### ARCH-OVERVIEW · approved · source: architecture:summary
 
-Expense Tracker is a lightweight, mobile-friendly responsive web app for individuals to privately track personal spending: manual expense logging, categorization, monthly per-category budgets, dashboard budget-vs-spend status, spending summary, and near-/over-budget alerts (in-app and email).
+Expense Tracker is a lightweight, mobile-friendly responsive web app for private personal spending tracking, built on the approved stack (React 19 SPA, FastAPI 0.115, PostgreSQL 16, AWS, SendGrid).
 
-Approved architecture, version 1. Built on the approved stack: React 19 SPA frontend, FastAPI 0.115 backend, PostgreSQL 16 database, deployed on AWS, with SendGrid for transactional (verification and budget-alert) emails. Auth uses server-side sessions with an opaque bearer token because the SPA and API are served from separate origins. Users sign up with email/password, manage default and custom categories, set monthly per-category budgets, and view budget status and spending summary in their chosen account currency.
+Users sign up with email/password, log manual expenses (amount, category, date), organize them under default and custom categories, set monthly per-category budgets, and view budget-vs-spending status plus a spending summary on a dashboard in their chosen account currency. Near-/over-budget thresholds trigger in-app and email alerts. Auth uses server-side sessions with an opaque bearer token because the SPA and API are served from separate origins.
 
-**Related:** COMP-WEB, COMP-API, COMP-DB, COMP-EMAIL
+**Related:** REQ-TECH-STACK, REQ-SERVICES
 
-### COMP-WEB · approved · source: architecture:components:web
+### ARCH-COMP-WEB · approved · source: architecture:component:web
 
-React 19 single-page application providing the entire responsive end-user UI.
+React SPA (React 19) delivers the responsive UI for sign-up/sign-in, expense entry/list with search/filter, category management, budgets, dashboard, summary, in-app alerts, currency selection and CSV export.
 
-Responsive web UI for sign-up/sign-in, expense entry and list with search/filter, category management, monthly budgets, dashboard budget status, spending summary, in-app alerts, currency selection, and CSV export. Stores the opaque session token client-side and sends it as an Authorization: Bearer header on every API call.
+Stores the opaque session token client-side and sends it as an Authorization: Bearer header on every API call.
 
-**Related:** COMP-API
+**Related:** REQ-FEAT-EXPENSES, REQ-FEAT-CATEGORIES, REQ-FEAT-BUDGETS, REQ-FEAT-DASHBOARD, REQ-FEAT-SETTINGS
 
-### COMP-API · approved · source: architecture:components:api
+### ARCH-COMP-API · approved · source: architecture:component:api
 
-FastAPI 0.115 REST backend handling all business logic, auth, and data access.
+FastAPI backend handles authentication/sessions, per-account data isolation, expense/category/budget CRUD, budget-vs-spending aggregation, near-/over-budget evaluation, in-app alert records, CSV export, and triggering email alerts.
 
-Handles authentication and server-side sessions, per-account data isolation, expense CRUD, category CRUD, monthly budgets, budget/spending aggregation, near-/over-budget evaluation, in-app alert records, CSV export, and triggering email alerts. Validates amounts, dates, and categories on input (via Pydantic).
+Validates amounts, dates and categories on input (Pydantic).
 
-**Related:** COMP-DB, COMP-EMAIL, COMP-WEB
+**Related:** REQ-FEAT-AUTH, REQ-FEAT-EXPENSES, REQ-FEAT-CATEGORIES, REQ-FEAT-BUDGETS, REQ-FEAT-ALERTS, REQ-FEAT-SETTINGS
 
-### COMP-DB · approved · source: architecture:components:db
+### ARCH-COMP-DB · approved · source: architecture:component:db
 
-PostgreSQL 16 database providing durable, per-account-isolated storage and aggregation.
+PostgreSQL 16 database durably stores users, sessions, categories, expenses, budgets and alerts.
 
-Durable storage of users, sessions, categories, expenses, budgets, and alerts. Performs per-category per-month spending totals that drive budget status, the summary, and alert thresholds. Each account's data is kept separate.
+Performs per-category per-month spending totals that drive budget status, the summary, and alert thresholds, keeping each account's data separate.
 
-**Related:** COMP-API
+**Related:** REQ-TECH-STACK
 
-### COMP-EMAIL · approved · source: architecture:components:email
+### ARCH-COMP-EMAIL · approved · source: architecture:component:email
 
-SendGrid transactional email service for verification and budget-alert emails.
+SendGrid provides transactional email delivery for sign-up/verification messages and near-/over-budget alert emails sent to the account email address.
 
-Delivers sign-up/verification messages and near-/over-budget alert emails to the account email address. Triggered by the API component.
+External SaaS dependency requiring SENDGRID_API_KEY.
 
-**Related:** COMP-API
+**Related:** REQ-SERVICES, REQ-FEAT-ALERTS, REQ-NFR-006
 
-### PATH-SIGNUP-SIGNIN · approved · source: architecture:critical_paths:signup_signin
+### ARCH-PATH-AUTH · approved · source: architecture:critical-path:Sign up and sign in
 
-Critical path for new-user registration and returning-user sign-in.
+New user registers with a unique, valid email and a password meeting minimum requirements; password is stored only as a hash.
 
-New user registers with a unique, valid email and a password meeting minimum requirements; password is stored only as a hash. Login verifies credentials and issues an opaque session token returned in the response body; the SPA stores it and sends it as a bearer token on subsequent calls. A wrong email or password always returns one generic invalid-credentials message (no detail on which field was wrong).
+Login verifies credentials and issues an opaque session token returned in the response body; the SPA stores it and sends it as a bearer token. Wrong email or password returns one generic invalid-credentials message.
 
-**Related:** COMP-WEB, COMP-API, COMP-DB
+**Related:** EPIC-001, US-001, US-002, REQ-NFR-001, REQ-NFR-002
 
-### PATH-EXPENSE-ALERT · approved · source: architecture:critical_paths:log_expense_alert
+### ARCH-PATH-EXPENSE-ALERT · approved · source: architecture:critical-path:Log expense and evaluate budget alerts
 
-Critical path for logging an expense and evaluating budget alerts.
+A signed-in user saves a validated positive expense; the API persists it, recalculates the category's monthly spending, and compares it against the budget.
 
-A signed-in user saves a validated positive expense (amount, category, date). The API persists it, recalculates the category's spending for that month, and compares it against the monthly budget. When the near- or over-budget threshold is crossed, an in-app alert is recorded and an email is sent via SendGrid. If the SendGrid API key is missing, the in-app alert still persists and the missing-configuration condition is surfaced to operators (email delivery degrades gracefully rather than blocking the core flow).
+When the near- or over-budget threshold is crossed, the API records an in-app alert and sends an email via SendGrid. If the email key is missing, the in-app alert still persists and the missing-config condition is surfaced to operators.
 
-**Related:** COMP-WEB, COMP-API, COMP-DB, COMP-EMAIL
+**Related:** EPIC-002, EPIC-006, US-005, US-016, US-017, REQ-NFR-006
 
-### DATA-MODEL · approved · source: architecture:entities
+### ARCH-DATA-MODEL · approved · source: architecture:entities
 
-Relational data model covering users, sessions, categories, expenses, budgets, and alerts.
+Six entities model users, sessions, categories, expenses, budgets and alerts.
 
-users: id, email, password_hash, currency_code, email_verified, created_at. sessions: token, user_id, created_at, expires_at, revoked_at. categories: id, user_id, name, is_default, created_at. expenses: id, user_id, category_id, amount, spent_on, note, created_at. budgets: id, user_id, category_id, monthly_amount, created_at, updated_at. alerts: id, user_id, category_id, period_month, status, email_sent, is_read, created_at. All user-owned tables scope rows by user_id to keep each account's data isolated.
+- users: id, email, password_hash, currency_code, email_verified, created_at.
+- sessions: token, user_id, created_at, expires_at, revoked_at.
+- categories: id, user_id, name, is_default, created_at.
+- expenses: id, user_id, category_id, amount, spent_on, note, created_at.
+- budgets: id, user_id, category_id, monthly_amount, created_at, updated_at.
+- alerts: id, user_id, category_id, period_month, status, email_sent, is_read, created_at.
 
-**Related:** COMP-DB, COMP-API
+**Related:** ARCH-COMP-DB
 
-### API-DESIGN · approved · source: architecture:endpoints
+### ARCH-EP-AUTH · approved · source: architecture:endpoints:auth
 
-REST API surface covering auth, profile/currency, categories, expenses, budgets, dashboard/summary, and alerts.
+Authentication endpoints for signup, login and logout.
 
-Auth: POST /auth/signup (unique email, min-strength password, seeds default categories, sends verification email); POST /auth/login (generic error on failure, returns opaque session token in body); POST /auth/logout (revokes current session token). Profile: GET /me (profile + account currency); PATCH /me/currency (set display currency). Categories: GET /categories; POST /categories (non-blank, non-duplicate name); PATCH /categories/{id} (rename, non-duplicate); DELETE /categories/{id} (custom only, requires confirm flag if used by existing expenses). Expenses: GET /expenses (recent-first, filterable by category and date range); POST /expenses (validated, triggers budget evaluation); PATCH /expenses/{id} (update amount/category/date, re-evaluates budget status); DELETE /expenses/{id} (removes from budgets/summary); GET /expenses/export (CSV of amount, category, date). Budgets: GET /budgets; PUT /budgets/{category_id} (set/update positive monthly budget); DELETE /budgets/{category_id} (removes status and alert generation). Dashboard/Summary: GET /dashboard (current-month budget-vs-spend per category: under/near/over; unbudgeted categories show spending only); GET /summary (total and per-category spend for selected month in account currency). Alerts: GET /alerts (list in-app alerts); POST /alerts/{id}/read (mark read).
+- POST /auth/signup - create account with unique email and password meeting minimum requirements; seeds default categories; sends verification email.
+- POST /auth/login - verify credentials and issue an opaque session token in the body; generic error on failure.
+- POST /auth/logout - revoke the current session token so it can no longer be used.
 
-**Related:** COMP-API, DATA-MODEL
+**Related:** US-001, US-002, US-003
 
-### DEPLOY-TOPOLOGY · approved · source: architecture:deployment_nodes
+### ARCH-EP-ACCOUNT · approved · source: architecture:endpoints:account
 
-AWS deployment topology with the SPA and API on separate origins, a managed database, and an external email SaaS.
+Account profile and currency endpoints.
 
-SPA Host: React 19 static build served from S3 behind CloudFront, its own origin, static assets. API Service: FastAPI 0.115 (Uvicorn) on AWS App Runner / ECS Fargate, a separate origin, running in a Python 3.12 container. Database: Amazon RDS for PostgreSQL 16. Email Provider: SendGrid transactional email, external SaaS API. The SPA/API origin split is the reason auth uses a bearer token rather than cookies.
+- GET /me - return the signed-in user's profile and account currency.
+- PATCH /me/currency - set the single account currency used to display all amounts.
 
-**Related:** COMP-WEB, COMP-API, COMP-DB, COMP-EMAIL
+**Related:** US-018
 
-### TECH-FRONTEND · approved · source: architecture:technology_decisions:frontend
+### ARCH-EP-CATEGORIES · approved · source: architecture:endpoints:categories
 
-React 19 chosen for the frontend SPA over Vue and Svelte.
+Category listing, creation, rename and deletion endpoints.
 
-Approved stack. React 19 builds the interactive form-and-list screens -- expense entry, filterable list, budget forms, and a live-updating dashboard/summary -- plus a responsive, mobile-friendly layout. Delivered as a Vite SPA on its own origin, reading the API base URL from VITE_API_BASE_URL. Alternatives considered: Vue, Svelte.
+- GET /categories - list default and custom categories.
+- POST /categories - create a custom category with non-blank, non-duplicate name.
+- PATCH /categories/{id} - rename a custom category to a valid non-duplicate name.
+- DELETE /categories/{id} - delete a custom category; requires confirm flag when used by existing expenses.
 
-**Related:** COMP-WEB
+**Related:** US-008, US-009, US-010
 
-### TECH-BACKEND · approved · source: architecture:technology_decisions:backend
+### ARCH-EP-EXPENSES · approved · source: architecture:endpoints:expenses
 
-FastAPI 0.115 chosen for the backend over Django REST Framework and Flask.
+Expense CRUD, listing/filtering and CSV export endpoints.
 
-Approved stack. FastAPI 0.115 with Pydantic validation keeps amounts, dates, and categories well-formed on input and cleanly implements auth, expense/category/budget CRUD, monthly aggregation, budget evaluation, and CSV export with little ceremony. Alternatives considered: Django REST Framework, Flask.
+- GET /expenses - list recent-first, filterable by category and date range.
+- POST /expenses - create a validated expense; triggers budget evaluation.
+- PATCH /expenses/{id} - update amount/category/date; re-evaluates affected budget status.
+- DELETE /expenses/{id} - delete so it no longer counts toward budgets or summary.
+- GET /expenses/export - export the signed-in user's expenses as CSV of amount, category and date.
 
-**Related:** COMP-API
+**Related:** US-005, US-006, US-007, US-019, US-020, US-021
 
-### TECH-DATABASE · approved · source: architecture:technology_decisions:database
+### ARCH-EP-BUDGETS · approved · source: architecture:endpoints:budgets
 
-PostgreSQL 16 chosen for the database over MySQL and SQLite.
+Budget listing, setting and removal endpoints.
 
-Approved stack. All data is structured and related -- users, categories, expenses, budgets. PostgreSQL 16 sums spending per category per month exactly with numeric types, powers list filtering and the summary, and keeps each account's data isolated. Filtering and aggregation stay inside PostgreSQL, so no separate search service is needed. Alternatives considered: MySQL, SQLite.
+- GET /budgets - list the user's category monthly budgets.
+- PUT /budgets/{category_id} - set or update a positive monthly budget for a category.
+- DELETE /budgets/{category_id} - remove a category budget so it stops showing status and generating alerts.
 
-**Related:** COMP-DB, DATA-MODEL
+**Related:** US-011, US-012
 
-### TECH-CLOUD · approved · source: architecture:technology_decisions:cloud
+### ARCH-EP-DASHBOARD-SUMMARY · approved · source: architecture:endpoints:dashboard-summary
 
-AWS chosen as the cloud provider over Google Cloud and Azure.
+Dashboard status and spending summary endpoints.
 
-Approved stack. AWS hosts the static SPA (S3/CloudFront), the FastAPI container (App Runner/ECS), and the database (RDS PostgreSQL 16) with small-usage tiers suited to a free app, plus TLS and encryption at rest for financial data. Alternatives considered: Google Cloud, Azure.
+- GET /dashboard - budget-vs-spending status for the current month per category (budget, spent, under/near/over); unbudgeted categories show spending only.
+- GET /summary - total spending and per-category breakdown for the selected month in account currency.
 
-**Related:** DEPLOY-TOPOLOGY, COMP-WEB, COMP-API, COMP-DB
+**Related:** US-013, US-014
+
+### ARCH-EP-ALERTS · approved · source: architecture:endpoints:alerts
+
+In-app alert listing and read-marking endpoints.
+
+- GET /alerts - list in-app near-/over-budget alerts for the signed-in user.
+- POST /alerts/{id}/read - mark an in-app alert as read.
+
+**Related:** US-016
+
+### ARCH-DEPLOY-SPA · approved · source: architecture:deployment-node:SPA Host
+
+React 19 static build served from S3 behind CloudFront, on its own origin.
+
+Deployment node type: Static assets.
+
+**Related:** ARCH-COMP-WEB
+
+### ARCH-DEPLOY-API · approved · source: architecture:deployment-node:API Service
+
+FastAPI 0.115 (Uvicorn) runs on AWS App Runner / ECS Fargate, on a separate origin from the SPA.
+
+Deployment node type: Python 3.12 container.
+
+**Related:** ARCH-COMP-API
+
+### ARCH-DEPLOY-DB · approved · source: architecture:deployment-node:Database
+
+Amazon RDS for PostgreSQL 16 hosts the database.
+
+Deployment node type: PostgreSQL 16.
+
+**Related:** ARCH-COMP-DB
+
+### ARCH-DEPLOY-EMAIL · approved · source: architecture:deployment-node:Email Provider
+
+SendGrid transactional email is used as an external SaaS API.
+
+Deployment node type: External API.
+
+**Related:** ARCH-COMP-EMAIL
+
+### ARCH-TECH-FRONTEND · approved · source: architecture:technology-decision:Frontend
+
+React 19 chosen over Vue/Svelte for the interactive form-and-list screens and responsive layout.
+
+Delivered as a Vite SPA on its own origin, reading the API base URL from VITE_API_BASE_URL.
+
+**Related:** ARCH-COMP-WEB
+
+### ARCH-TECH-BACKEND · approved · source: architecture:technology-decision:Backend
+
+FastAPI 0.115 chosen over Django REST Framework/Flask for Pydantic-validated auth, CRUD, aggregation, budget evaluation and CSV export with little ceremony.
+
+Keeps amounts, dates and categories well-formed on input.
+
+**Related:** ARCH-COMP-API
+
+### ARCH-TECH-DATABASE · approved · source: architecture:technology-decision:Database
+
+PostgreSQL 16 chosen over MySQL/SQLite because all data is structured and related; numeric types sum spending exactly and keep accounts isolated.
+
+Filtering and aggregation stay inside PostgreSQL, so no separate search service is needed.
+
+**Related:** ARCH-COMP-DB
+
+### ARCH-TECH-CLOUD · approved · source: architecture:technology-decision:Cloud
+
+AWS chosen over Google Cloud/Azure to host the static SPA (S3/CloudFront), FastAPI container (App Runner/ECS) and database (RDS PostgreSQL 16).
+
+Small-usage tiers suited to a free app, plus TLS and encryption at rest for financial data.
+
+**Related:** ARCH-DEPLOY-SPA, ARCH-DEPLOY-API, ARCH-DEPLOY-DB
 <!-- sdlc:auto:end narrative -->
 
 <!-- sdlc:auto:start building-blocks -->

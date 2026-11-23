@@ -5,97 +5,95 @@
 <!-- sdlc:auto:start narrative -->
 ### EPIC-001 · approved · source: planning:EPIC-001
 
-Lets individuals create a private email/password account, sign in and out, and guarantees each account's expense and budget data stays private to that account.
+Individuals create a private personal account using email and password, sign in to reach their own data, and sign out; each account's data is private and never visible to other users.
 
-Goal: individuals create a private personal account using email and password, sign in to reach their own data, and sign out; each account's expense/budget data is private and never visible to other users. Authentication is email/password only; the app is free with no payment, billing or subscription features. Stories: US-001 sign up, US-002 sign in, US-003 sign out and session expiry, US-004 per-account data isolation.
+Authentication is email/password only; the app is free to use with no payment, billing, or subscription features.
 
 **Related:** US-001, US-002, US-003, US-004
 
 ### EPIC-002 · approved · source: planning:EPIC-002
 
-Covers manual creation, editing and deletion of expenses with amount, category and date; no bank/card sync or receipt OCR.
+Users manually record expenses with an amount, category and date, and can edit and delete them.
 
-Goal: users manually record expenses with an amount, category and date; no automatic bank/card sync and no receipt photo or OCR capture (both out of scope); users can edit and delete their expenses; amounts shown in the account's single selected currency with no conversion. Stories: US-005 log a new expense, US-006 edit an existing expense, US-007 delete an expense.
+No automatic bank/card sync and no receipt photo or OCR capture (both out of scope). Amounts are shown in the account's single selected currency with no conversion.
 
 **Related:** US-005, US-006, US-007
 
 ### EPIC-003 · approved · source: planning:EPIC-003
 
-Provides default spending categories plus the ability for each user to create and manage custom categories used for expenses and budgets.
+The app provides ready-made default spending categories and lets each user create their own custom categories.
 
-Goal: the app provides a set of default spending categories and lets each user create their own custom categories; categories classify expenses and set budgets. Stories: US-008 use default categories, US-009 create a custom category, US-010 manage (rename/remove) custom categories.
+Categories are used to classify expenses and to set budgets.
 
 **Related:** US-008, US-009, US-010
 
 ### EPIC-004 · approved · source: planning:EPIC-004
 
-Lets users set a monthly budget amount per category and keep it updated so spending can be measured against it.
+Users set a monthly budget amount per category; budget-vs-spending status is visible and drives near-/over-budget alerts.
 
-Goal: users set a monthly budget amount per category; budget period is monthly; budget-versus-spending status is visible and spending against each budget drives near-budget/over-budget alerts. Stories: US-011 set a monthly budget for a category, US-012 update or remove a category budget.
+The budget period is monthly.
 
 **Related:** US-011, US-012
 
 ### EPIC-005 · approved · source: planning:EPIC-005
 
-Dashboard showing budget-versus-spending status and a simple monthly spending summary, delivered as a responsive, mobile-friendly view.
+A dashboard shows budget-vs-spending status for the current month and a simple spending summary.
 
-Goal: a dashboard shows budget-versus-spending status for the current month and a simple spending summary; included as a supporting view even though full reports and income tracking were not selected as priorities; the view is mobile-friendly and responsive. Stories: US-013 see budget-versus-spending status, US-014 view a simple spending summary, US-015 mobile-friendly responsive layout.
+Included as a supporting view even though full reports and income tracking were not prioritized. The view is mobile-friendly and responsive.
 
 **Related:** US-013, US-014, US-015
 
 ### EPIC-006 · approved · source: planning:EPIC-006
 
-Alerts users in-app and by email when category spending nears or exceeds its monthly budget.
+When spending for a category reaches a near-budget threshold or exceeds the budget, the user is alerted both in-app and by email.
 
-Goal: when spending for a category reaches a near-budget threshold or exceeds the budget, the user is alerted both in-app and by email; email delivery uses a transactional email provider that requires an email API key configured by operators. Stories: US-016 receive in-app budget alerts, US-017 receive budget alerts by email.
+Email delivery uses a transactional email provider that requires an email API key configured by operators.
 
 **Related:** US-016, US-017
 
 ### EPIC-007 · approved · source: planning:EPIC-007
 
-Lets each account pick a single display currency (no conversion) and export recorded expenses as CSV.
-
-Goal: each account uses a single user-selectable currency with no multi-currency conversion; users can export their expense data as CSV. Stories: US-018 select a single account currency, US-019 export expenses as CSV.
+Each account uses a single user-selectable currency with no multi-currency conversion, and users can export their expense data as CSV.
 
 **Related:** US-018, US-019
 
 ### EPIC-008 · approved · source: planning:EPIC-008
 
-Supporting expense list view for browsing, searching and filtering recorded expenses by category and date range.
+A supporting expense list view lets users browse, search and filter their recorded expenses.
 
-Goal: a supporting expense list view lets users browse, search and filter their recorded expenses; included as a supporting feature even though it was not a stated top priority. Stories: US-020 browse my expenses, US-021 search and filter expenses.
+Included as a supporting feature even though it was not a stated top priority.
 
 **Related:** US-020, US-021
 
-### SPRINT-1 · approved · source: plan:Sprint 1
+### SPRINT-1 · approved · source: planning:plan-v2:Sprint 1
 
-First sprint targets authentication, session security, per-account data isolation, and default/custom categories.
+Sprint 1: authentication, session security, per-account data isolation, and default/custom categories in place.
 
-Goal: Authentication, session security, per-account data isolation, and default/custom categories in place. Capacity: 20 points. Epic alignment inferred from goal wording (EPIC-001 Account Registration/Sign-in/Security, EPIC-003 Spending Categories); the input's plan item list gives per-story points and assigned role but does not state which sprint each item is scheduled in, so individual story-to-sprint assignment is not documented here.
+Capacity: 20 points.
 
-**Related:** EPIC-001, EPIC-003
+**Related:** EPIC-001, US-001, US-002, US-003, US-004, EPIC-003, US-008, US-009, US-010
 
-### SPRINT-2 · approved · source: plan:Sprint 2
+### SPRINT-2 · approved · source: planning:plan-v2:Sprint 2
 
-Second sprint targets full manual expense CRUD, category management, monthly budgets, and the browsable/filterable expense list.
+Sprint 2: full manual expense CRUD, category management, monthly budgets, and the browsable/filterable expense list.
 
-Goal: Full manual expense CRUD, category management, monthly budgets, and the browsable/filterable expense list. Capacity: 20 points. Epic alignment inferred from goal wording (EPIC-002 Manual Expense Entry and Management, EPIC-003 Spending Categories, EPIC-004 Monthly Budgets per Category, EPIC-008 Searchable and Filterable Expense List); the input does not explicitly assign individual story items to this sprint.
+Capacity: 20 points.
 
-**Related:** EPIC-002, EPIC-003, EPIC-004, EPIC-008
+**Related:** EPIC-002, US-005, US-006, US-007, EPIC-004, US-011, US-012, EPIC-008, US-020, US-021
 
-### SPRINT-3 · approved · source: plan:Sprint 3
+### SPRINT-3 · approved · source: planning:plan-v2:Sprint 3
 
-Third sprint targets dashboard budget status, spending summary, in-app/email budget alerts, and account currency selection.
+Sprint 3: dashboard budget status, spending summary, in-app/email budget alerts, and account currency selection.
 
-Goal: Dashboard budget status, spending summary, in-app/email budget alerts, and account currency selection. Capacity: 20 points. Epic alignment inferred from goal wording (EPIC-005 Dashboard/Budget Status/Spending Summary, EPIC-006 Near-Budget and Over-Budget Alerts, EPIC-007 Account Currency and Data Export for the currency-selection portion); the input does not explicitly assign individual story items to this sprint.
+Capacity: 20 points.
 
-**Related:** EPIC-005, EPIC-006, EPIC-007
+**Related:** EPIC-005, US-013, US-014, EPIC-006, US-016, US-017, US-018
 
-### SPRINT-4 · approved · source: plan:Sprint 4
+### SPRINT-4 · approved · source: planning:plan-v2:Sprint 4
 
-Fourth sprint targets responsive layout polish and CSV export of expense data.
+Sprint 4: responsive layout polish and CSV export of expense data.
 
-Goal: Responsive layout polish and CSV export of expense data. Capacity: 20 points. Epic alignment inferred from goal wording (EPIC-005 Dashboard/responsive layout, EPIC-007 Account Currency and Data Export for CSV export); the input does not explicitly assign individual story items to this sprint.
+Capacity: 20 points.
 
-**Related:** EPIC-005, EPIC-007
+**Related:** US-015, US-019
 <!-- sdlc:auto:end narrative -->
